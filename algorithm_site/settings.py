@@ -193,7 +193,8 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 
 # ─── БЕЗОПАСНОСТЬ (prod) ──────────────────────────────────────────────────────
 if not DEBUG:
-    SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', '1').lower() in ('1', 'true')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = False
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
