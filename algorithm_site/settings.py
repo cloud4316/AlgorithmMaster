@@ -4,18 +4,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ─── .env (локальная разработка) ───────────────────────────────────────────────
-# На Render переменные задаются в Dashboard > Environment.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(BASE_DIR / '.env')
-except ImportError:
-    pass
-
 # ─── СЕКРЕТНЫЙ КЛЮЧ ────────────────────────────────────────────────────────────
-# 1) Из переменной окружения (Render / .env)
-# 2) Из файла secret_key.txt (локальная сеть, как было раньше)
-# 3) Генерация нового (первый запуск)
 _KEY_FILE = BASE_DIR / 'secret_key.txt'
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
@@ -26,7 +15,6 @@ if not SECRET_KEY:
         _KEY_FILE.write_text(SECRET_KEY, encoding='utf-8')
 
 # ─── РЕЖИМ ─────────────────────────────────────────────────────────────────────
-# Приоритет: переменная DEBUG → файл DEBUG.lock
 _debug_env = os.environ.get('DEBUG')
 if _debug_env is not None:
     DEBUG = _debug_env.lower() in ('1', 'true', 'yes')
@@ -34,11 +22,7 @@ else:
     DEBUG = (BASE_DIR / 'DEBUG.lock').exists()
 
 # ─── РАЗРЕШЁННЫЕ ХОСТЫ ─────────────────────────────────────────────────────────
-_hosts_env = os.environ.get('ALLOWED_HOSTS')
-if _hosts_env:
-    ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(',') if h.strip()]
-else:
-    ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*']
 
 INTERNAL_IPS = ['127.0.0.1', '::1', 'localhost']
 
@@ -49,9 +33,6 @@ CSRF_TRUSTED_ORIGINS = [
     'http://192.168.0.0:8000',
     'http://10.0.0.0:8000',
 ]
-_render_url = os.environ.get('RENDER_EXTERNAL_URL')
-if _render_url:
-    CSRF_TRUSTED_ORIGINS.append(_render_url)
 
 # ─── ПРИЛОЖЕНИЯ ────────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
@@ -101,34 +82,22 @@ TEMPLATES = [
 WSGI_APPLICATION = 'algorithm_site.wsgi.application'
 
 # ─── БАЗА ДАННЫХ ───────────────────────────────────────────────────────────────
-# DATABASE_URL задана → PostgreSQL (Render).  Иначе → SQLite (локалка).
-_db_url = os.environ.get('DATABASE_URL')
-if _db_url:
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.parse(
-            _db_url,
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 30,
+            'init_command': (
+                "PRAGMA journal_mode=WAL;"
+                "PRAGMA synchronous=NORMAL;"
+                "PRAGMA cache_size=10000;"
+                "PRAGMA temp_store=MEMORY;"
+                "PRAGMA foreign_keys=ON;"
+            ),
+        },
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {
-                'timeout': 30,
-                'init_command': (
-                    "PRAGMA journal_mode=WAL;"
-                    "PRAGMA synchronous=NORMAL;"
-                    "PRAGMA cache_size=10000;"
-                    "PRAGMA temp_store=MEMORY;"
-                    "PRAGMA foreign_keys=ON;"
-                ),
-            },
-        }
-    }
+}
 
 # ─── КЭШ ──────────────────────────────────────────────────────────────────────
 CACHES = {
@@ -187,18 +156,9 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 604800
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = False
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-
-# ─── БЕЗОПАСНОСТЬ (prod) ──────────────────────────────────────────────────────
-if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    SECURE_SSL_REDIRECT = False
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    CSRF_COOKIE_SECURE = True
 
 # ─── АУТЕНТИФИКАЦИЯ ────────────────────────────────────────────────────────────
 LOGIN_REDIRECT_URL  = 'home'
@@ -289,18 +249,10 @@ LOGGING = {
     },
 }
 
-# На Render лог-файлы не нужны — всё идёт в stdout
-if os.environ.get('RENDER'):
-    for _handler_name in ('file', 'errors_file'):
-        LOGGING['handlers'][_handler_name] = {
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        }
-
 # ─── EMAIL ─────────────────────────────────────────────────────────────────────
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('DJANGO_EMAIL_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('DJANGO_EMAIL_PASSWORD', '')
