@@ -165,7 +165,8 @@ USE_TZ = True
 
 # ─── СТАТИКА И МЕДИА ───────────────────────────────────────────────────────────
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+_static_dir = BASE_DIR / 'static'
+STATICFILES_DIRS = [_static_dir] if _static_dir.is_dir() else []
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STORAGES = {
     'default': {
