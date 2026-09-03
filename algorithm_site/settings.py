@@ -102,10 +102,9 @@ WSGI_APPLICATION = 'algorithm_site.wsgi.application'
 
 # ─── БАЗА ДАННЫХ ───────────────────────────────────────────────────────────────
 # DATABASE_URL задана → PostgreSQL (Render).  Иначе → SQLite (локалка).
-import dj_database_url
-
 _db_url = os.environ.get('DATABASE_URL')
 if _db_url:
+    import dj_database_url
     DATABASES = {
         'default': dj_database_url.parse(
             _db_url,
