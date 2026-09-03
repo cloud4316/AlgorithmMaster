@@ -1,0 +1,148 @@
+{% extends 'works/base.html' %}
+{% block title %}Проекты студентов{% endblock %}
+{% block content %}
+<div class="tp-page">
+  <div class="tp-header">
+    <h1><i class="fas fa-folder-open"></i> Проекты студентов</h1>
+  </div>
+
+  <!-- Фильтры -->
+  <form method="get" class="tp-filters">
+    <select name="student" class="tp-select" onchange="this.form.submit()">
+      <option value="">Все студенты</option>
+      {% for s in students %}
+      <option value="{{ s.id }}" {% if selected_student == s.id|stringformat:"s" %}selected{% endif %}>
+        {{ s.last_name }} {{ s.first_name }}
+      </option>
+      {% endfor %}
+    </select>
+    <select name="lang" class="tp-select" onchange="this.form.submit()">
+      <option value="">Все языки</option>
+      <option value="python"     {% if selected_lang == 'python' %}selected{% endif %}>Python</option>
+      <option value="cpp"        {% if selected_lang == 'cpp' %}selected{% endif %}>C++</option>
+      <option value="java"       {% if selected_lang == 'java' %}selected{% endif %}>Java</option>
+      <option value="javascript" {% if selected_lang == 'javascript' %}selected{% endif %}>JavaScript</option>
+    </select>
+    {% if selected_student or selected_lang %}
+    <a href="{% url 'teacher_projects' %}" class="tp-clear">✕ Сбросить</a>
+    {% endif %}
+    <span class="tp-count">{{ projects|length }} проектов</span>
+  </form>
+
+  {% if projects %}
+  <div class="tp-table-wrap">
+    <table class="tp-table">
+      <thead>
+        <tr>
+          <th>Студент</th>
+          <th>Проект</th>
+          <th>Язык</th>
+          <th>Предмет</th>
+          <th>Обновлён</th>
+          <th>Строк</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in projects %}
+        <tr>
+          <td class="td-student">{{ p.student.last_name }} {{ p.student.first_name }}</td>
+          <td class="td-title">
+            <div class="tp-proj-title">{{ p.title }}</div>
+            {% if p.description %}<div class="tp-proj-desc">{{ p.description|truncatechars:50 }}</div>{% endif %}
+          </td>
+          <td><span class="proj-lang proj-lang-{{ p.language }}">{{ p.get_language_display }}</span></td>
+          <td>{% if p.subject %}{{ p.subject.title }}{% else %}<span class="tp-none">—</span>{% endif %}</td>
+          <td class="td-date">{{ p.updated_at|date:"d.m.Y H:i" }}</td>
+          <td>{{ p.code|linebreaksbr|striptags|length }}</td>
+          <td>
+            <button class="btn-view-code" onclick="viewProject({{ p.id }}, '{{ p.title|escapejs }}', '{{ p.get_language_display }}', this)">
+              <i class="fas fa-eye"></i> Код
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="tp-empty">
+    <p>Нет проектов по выбранным фильтрам</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Модалка просмотра кода -->
+<div class="tp-modal" id="codeModal" style="display:none" onclick="closeModal(event)">
+  <div class="tp-modal-box">
+    <div class="tp-modal-header">
+      <div>
+        <h3 id="modalTitle"></h3>
+        <span id="modalLang" class="tp-modal-lang"></span>
+      </div>
+      <button onclick="document.getElementById('codeModal').style.display='none'" class="tp-modal-close">✕</button>
+    </div>
+    <pre id="modalCode" class="tp-modal-code"></pre>
+  </div>
+</div>
+
+<script>
+// Данные проектов встроены в страницу
+const PROJ_CODES = {};
+{% for p in projects %}
+PROJ_CODES[{{ p.id }}] = `{{ p.code|escapejs }}`;
+{% endfor %}
+
+function viewProject(id, title, lang, btn) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalLang').textContent = lang;
+  document.getElementById('modalCode').textContent = PROJ_CODES[id] || '(нет кода)';
+  document.getElementById('codeModal').style.display = 'flex';
+}
+function closeModal(e) {
+  if (e.target.id === 'codeModal') e.target.style.display = 'none';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('codeModal').style.display = 'none';
+});
+</script>
+
+<style>
+.tp-page{max-width:1200px;margin:0 auto;padding:2rem 1rem}
+.tp-header{margin-bottom:1.5rem}
+.tp-header h1{font-size:1.5rem;font-weight:700}
+.tp-filters{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.tp-select{border:1.5px solid #e5e7eb;border-radius:8px;padding:.45rem .75rem;font-size:.88rem;background:#fff;color:#1f2937;cursor:pointer}
+.tp-clear{font-size:.85rem;color:#dc2626;text-decoration:none;background:#fee2e2;padding:.4rem .75rem;border-radius:8px}
+.tp-count{margin-left:auto;font-size:.82rem;color:#9ca3af}
+.tp-table-wrap{overflow-x:auto}
+.tp-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.tp-table th{background:#f9fafb;padding:.6rem 1rem;text-align:left;font-weight:600;color:#6b7280;border-bottom:2px solid #e5e7eb;white-space:nowrap}
+.tp-table td{padding:.65rem 1rem;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+.tp-table tr:hover td{background:#f9fafb}
+.td-student{font-weight:600;white-space:nowrap}
+.tp-proj-title{font-weight:500;color:#1f2937}
+.tp-proj-desc{font-size:.78rem;color:#9ca3af;margin-top:.15rem}
+.td-date{white-space:nowrap;color:#6b7280;font-size:.82rem}
+.tp-none{color:#d1d5db}
+.proj-lang{font-size:.72rem;font-weight:700;padding:.2rem .55rem;border-radius:20px;letter-spacing:.04em;text-transform:uppercase}
+.proj-lang-python{background:#e0f2fe;color:#0369a1}
+.proj-lang-cpp{background:#fef3c7;color:#92400e}
+.proj-lang-java{background:#fce7f3;color:#9d174d}
+.proj-lang-javascript{background:#fef9c3;color:#713f12}
+.proj-lang-other{background:#f3f4f6;color:#6b7280}
+.btn-view-code{background:#eff6ff;color:#667eea;border:1px solid #c7d2fe;border-radius:6px;padding:.3rem .65rem;font-size:.8rem;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem}
+.btn-view-code:hover{background:#dbeafe}
+.tp-empty{text-align:center;padding:3rem;color:#9ca3af}
+
+/* Модалка */
+.tp-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:999;padding:1rem}
+.tp-modal-box{background:#1e1e2e;border-radius:14px;width:100%;max-width:780px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.tp-modal-header{display:flex;justify-content:space-between;align-items:flex-start;padding:1rem 1.25rem;background:#282a36;border-bottom:1px solid #374151}
+.tp-modal-header h3{color:#f8f8f2;margin:0;font-size:1rem}
+.tp-modal-lang{font-size:.75rem;color:#8be9fd;font-weight:600}
+.tp-modal-close{background:none;border:none;color:#6272a4;font-size:1.2rem;cursor:pointer;line-height:1}
+.tp-modal-close:hover{color:#f8f8f2}
+.tp-modal-code{color:#f8f8f2;padding:1rem 1.25rem;font-family:monospace;font-size:.85rem;overflow:auto;margin:0;white-space:pre;flex:1}
+</style>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends 'works/base.html' %}
+{% block title %}Ошибка сервера — AlgorithmMaster{% endblock %}
+{% block content %}
+<div style="max-width:500px;margin:5rem auto;text-align:center;padding:2rem">
+  <div style="font-size:4rem;margin-bottom:1rem">&#9888;</div>
+  <h1 style="font-size:2rem;font-weight:700;margin-bottom:.75rem">Что-то пошло не так</h1>
+  <p style="color:#6b7280;margin-bottom:2rem;line-height:1.6">
+    Произошла внутренняя ошибка сервера. Мы уже записали её в журнал.<br>
+    Попробуйте обновить страницу или вернитесь позже.
+  </p>
+  <a href="/" style="display:inline-block;background:#667eea;color:#fff;padding:.75rem 2rem;border-radius:8px;text-decoration:none;font-weight:600">
+    На главную
+  </a>
+</div>
+{% endblock %}

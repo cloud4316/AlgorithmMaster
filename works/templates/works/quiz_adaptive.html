@@ -1,0 +1,354 @@
+{% extends 'works/base.html' %}
+{% block title %}Адаптивный тест — {{ quiz.title }}{% endblock %}
+{% block content %}
+<div class="aq-page">
+
+  <div class="aq-header">
+    <a href="{% url 'quiz_detail' quiz.id %}" class="back-link"><i class="fas fa-arrow-left"></i> К тесту</a>
+    <div>
+      <h1>{{ quiz.title }}</h1>
+      <p class="aq-subtitle">Адаптивный режим · сложность подстраивается под ответы</p>
+    </div>
+  </div>
+
+  <!-- Прогресс -->
+  <div class="aq-progress-bar-wrap">
+    <div class="aq-progress-bar" id="progressBar" style="width:0%"></div>
+  </div>
+  <div class="aq-progress-meta">
+    <span id="progressLabel">Вопрос 1 из {{ total }}</span>
+    <span id="scoreLabel">0 правильных</span>
+    <span id="diffBadge" class="diff-badge diff-2">Средний</span>
+  </div>
+
+  <!-- Карточка вопроса -->
+  <div class="aq-card" id="questionCard">
+    <div class="aq-q-num" id="qNum"></div>
+    <div class="aq-q-text" id="qText"></div>
+    <pre class="aq-code" id="qCode" style="display:none"></pre>
+    <div class="aq-choices" id="qChoices"></div>
+    <button class="aq-btn" id="confirmBtn" onclick="confirmAnswer()" disabled>Подтвердить</button>
+    <div class="aq-explanation" id="qExplanation" style="display:none"></div>
+    <button class="aq-next-btn" id="nextBtn" onclick="nextQuestion()" style="display:none">
+      Следующий вопрос <i class="fas fa-arrow-right"></i>
+    </button>
+  </div>
+
+  <!-- Финальный экран -->
+  <div class="aq-result" id="resultScreen" style="display:none">
+    <div class="aq-result-icon" id="resultIcon"></div>
+    <h2 id="resultTitle"></h2>
+    <p id="resultDesc"></p>
+    <div class="aq-result-stats">
+      <div class="aq-stat"><span id="statCorrect">0</span><small>правильно</small></div>
+      <div class="aq-stat"><span id="statTotal">0</span><small>всего</small></div>
+      <div class="aq-stat"><span id="statPct">0%</span><small>результат</small></div>
+    </div>
+    <div class="aq-result-actions">
+      <button class="aq-btn" id="reviewToggleBtn" onclick="toggleReview()">🔍 Разбор ошибок</button>
+      <a href="{% url 'quiz_adaptive' quiz.id %}" class="aq-btn-outline">Пройти снова</a>
+      <a href="{% url 'quiz_detail' quiz.id %}" class="aq-btn-outline">Обычный режим</a>
+    </div>
+  </div>
+
+  <!-- Разбор ответов (строится JS'ом) -->
+  <div id="aq-review-section" style="display:none;margin-top:1.5rem"></div>
+</div>
+
+<script>
+const ALL_Q = {{ questions_json|safe }};
+const TOTAL = ALL_Q.length;
+let currentDiff = 2;
+let answered = 0;
+let correct = 0;
+let usedIds = new Set();
+let selectedIds = new Set();
+let currentQ = null;
+let answered_this = false;
+// Сохраняем историю ответов для разбора в конце
+const _history = []; // [{q, chosenIds, isCorrect}]
+
+const DIFF_NAMES = {1:'Лёгкий', 2:'Средний', 3:'Сложный'};
+const DIFF_CSS   = {1:'diff-1', 2:'diff-2', 3:'diff-3'};
+
+function pickQuestion() {
+  // Ищем вопрос текущей сложности, не использованный
+  let pool = ALL_Q.filter(q => q.difficulty === currentDiff && !usedIds.has(q.id));
+  if (!pool.length) {
+    // Нет вопросов этой сложности — берём любой неиспользованный
+    pool = ALL_Q.filter(q => !usedIds.has(q.id));
+  }
+  if (!pool.length) return null; // всё пройдено
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function renderQuestion(q) {
+  currentQ = q;
+  answered_this = false;
+  selectedIds.clear();
+
+  document.getElementById('qNum').textContent = 'Вопрос ' + (answered + 1);
+  document.getElementById('qText').innerHTML = q.text;
+
+  const codeEl = document.getElementById('qCode');
+  if (q.code) { codeEl.textContent = q.code; codeEl.style.display = 'block'; }
+  else codeEl.style.display = 'none';
+
+  const choicesEl = document.getElementById('qChoices');
+  choicesEl.innerHTML = '';
+  q.choices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = c.text;
+    btn.dataset.id = c.id;
+    btn.onclick = () => toggleChoice(btn, q.q_type);
+    choicesEl.appendChild(btn);
+  });
+
+  document.getElementById('qExplanation').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('confirmBtn').style.display = 'inline-block';
+  document.getElementById('confirmBtn').disabled = true;
+  document.getElementById('confirmBtn').textContent = 'Подтвердить';
+
+  updateProgress();
+  updateDiffBadge();
+}
+
+function toggleChoice(btn, type) {
+  if (answered_this) return;
+  const id = parseInt(btn.dataset.id);
+  if (type === 'single') {
+    document.querySelectorAll('.choice-btn').forEach(b => {
+      b.classList.remove('selected');
+      selectedIds.delete(parseInt(b.dataset.id));
+    });
+    btn.classList.add('selected');
+    selectedIds.add(id);
+  } else {
+    if (selectedIds.has(id)) { selectedIds.delete(id); btn.classList.remove('selected'); }
+    else { selectedIds.add(id); btn.classList.add('selected'); }
+  }
+  document.getElementById('confirmBtn').disabled = selectedIds.size === 0;
+}
+
+function confirmAnswer() {
+  if (!currentQ || answered_this) return;
+  answered_this = true;
+  document.getElementById('confirmBtn').disabled = true;
+
+  const correctSet = new Set(currentQ.correct_ids);
+  const chosenNow = new Set(selectedIds);
+  const isCorrect = chosenNow.size === correctSet.size &&
+    [...chosenNow].every(id => correctSet.has(id));
+
+  // Сохраняем для итогового разбора
+  _history.push({ q: currentQ, chosenIds: [...chosenNow], isCorrect });
+
+  // Показываем только ✓/✗ — БЕЗ раскрытия правильного ответа
+  document.querySelectorAll('.choice-btn').forEach(btn => {
+    const id = parseInt(btn.dataset.id);
+    if (chosenNow.has(id)) {
+      btn.classList.add(isCorrect ? 'confirmed-ok' : 'confirmed-fail');
+    }
+    btn.disabled = true;
+  });
+
+  // Короткое feedback-сообщение
+  const expl = document.getElementById('qExplanation');
+  expl.textContent = isCorrect ? '✓ Верно!' : '✗ Неверно — разбор будет в конце';
+  expl.style.display = 'block';
+  expl.className = 'aq-explanation ' + (isCorrect ? 'expl-ok' : 'expl-fail');
+
+  answered++;
+  usedIds.add(currentQ.id);
+
+  if (isCorrect) {
+    correct++;
+    currentDiff = Math.min(3, currentDiff + 1);
+  } else {
+    currentDiff = Math.max(1, currentDiff - 1);
+  }
+
+  updateProgress();
+
+  const isLast = answered >= TOTAL || usedIds.size >= ALL_Q.length;
+  const nextBtn = document.getElementById('nextBtn');
+  if (isLast) {
+    nextBtn.textContent = 'Посмотреть результат';
+    nextBtn.onclick = showResult;
+  }
+  nextBtn.style.display = 'inline-block';
+}
+
+function nextQuestion() {
+  if (answered >= TOTAL || usedIds.size >= ALL_Q.length) { showResult(); return; }
+  const q = pickQuestion();
+  if (!q) { showResult(); return; }
+  renderQuestion(q);
+}
+
+function updateProgress() {
+  const pct = Math.round(answered / TOTAL * 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = 'Вопрос ' + (answered + 1) + ' из ' + TOTAL;
+  document.getElementById('scoreLabel').textContent = correct + ' правильных';
+}
+
+function updateDiffBadge() {
+  const badge = document.getElementById('diffBadge');
+  badge.textContent = DIFF_NAMES[currentDiff];
+  badge.className = 'diff-badge ' + DIFF_CSS[currentDiff];
+}
+
+function showResult() {
+  document.getElementById('questionCard').style.display = 'none';
+  const screen = document.getElementById('resultScreen');
+  screen.style.display = 'block';
+  const pct = TOTAL > 0 ? Math.round(correct / TOTAL * 100) : 0;
+  const passed = pct >= {{ quiz.pass_score }};
+  document.getElementById('resultIcon').innerHTML = passed ? '&#127942;' : '&#128260;';
+  document.getElementById('resultTitle').textContent = passed ? 'Тест пройден!' : 'Попробуй ещё раз';
+  document.getElementById('resultDesc').textContent =
+    passed ? 'Отличная работа! Результат выше проходного балла.'
+           : 'Не расстраивайся — повтори теорию и попробуй снова.';
+  document.getElementById('statCorrect').textContent = correct;
+  document.getElementById('statTotal').textContent = TOTAL;
+  document.getElementById('statPct').textContent = pct + '%';
+  // Если нет ошибок — скрываем кнопку разбора
+  const errors = TOTAL - correct;
+  const rb = document.getElementById('reviewToggleBtn');
+  if (errors === 0) { rb.textContent = '✅ Посмотреть разбор'; }
+  else { rb.textContent = '🔍 Разбор ошибок (' + errors + ')'; }
+}
+
+let _reviewShown = false;
+function toggleReview() {
+  if (_reviewShown) return;
+  _reviewShown = true;
+  const section = document.getElementById('aq-review-section');
+  section.style.display = 'block';
+  section.innerHTML = '<h2 class="aq-review-title">Разбор ответов</h2>';
+
+  _history.forEach((entry, idx) => {
+    const { q, chosenIds, isCorrect } = entry;
+    const chosen = new Set(chosenIds);
+    const correct_ids = new Set(q.correct_ids);
+
+    const card = document.createElement('div');
+    card.className = 'aq-rev-card ' + (isCorrect ? 'rev-ok' : 'rev-fail');
+
+    let choicesHtml = q.choices.map(c => {
+      const wasChosen = chosen.has(c.id);
+      const isRight = correct_ids.has(c.id);
+      let cls = 'rev-choice';
+      let tag = '';
+      if (wasChosen && isRight)  { cls += ' rev-chosen-ok';   tag = '<span class="rev-tag ok">Твой ответ · верно</span>'; }
+      else if (wasChosen && !isRight) { cls += ' rev-chosen-fail'; tag = '<span class="rev-tag fail">Твой ответ · неверно</span>'; }
+      else if (!wasChosen && isRight && !isCorrect) { cls += ' rev-correct'; tag = '<span class="rev-tag ok">Правильный ответ</span>'; }
+      return `<div class="${cls}">${c.text}${tag}</div>`;
+    }).join('');
+
+    let expHtml = '';
+    if (!isCorrect && q.explanation) {
+      expHtml = `<div class="rev-exp">💡 ${q.explanation}</div>`;
+    }
+
+    card.innerHTML = `
+      <div class="rev-header">
+        <span class="rev-num">${idx + 1}</span>
+        <span class="rev-verdict">${isCorrect ? '✓ Верно' : '✗ Ошибка'}</span>
+      </div>
+      <div class="rev-qtext">${q.text}</div>
+      ${q.code ? `<pre class="aq-code rev-code">${q.code}</pre>` : ''}
+      <div class="rev-choices">${choicesHtml}</div>
+      ${expHtml}
+    `;
+    section.appendChild(card);
+  });
+
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const rb = document.getElementById('reviewToggleBtn');
+  rb.textContent = '✅ Разбор показан';
+  rb.disabled = true;
+  rb.style.opacity = '0.7';
+}
+
+// Старт
+const first = ALL_Q.filter(q => q.difficulty === 2)[0] || ALL_Q[0];
+if (first) renderQuestion(first); else showResult();
+</script>
+
+<style>
+.aq-page{max-width:720px;margin:0 auto;padding:2rem 1rem}
+.aq-header{margin-bottom:1.5rem}
+.back-link{display:inline-flex;align-items:center;gap:.4rem;color:#667eea;text-decoration:none;font-size:.85rem;margin-bottom:.6rem}
+.aq-header h1{font-size:1.5rem;font-weight:700;margin:0 0 .2rem}
+.aq-subtitle{color:#6b7280;font-size:.87rem}
+.aq-progress-bar-wrap{height:8px;background:#f3f4f6;border-radius:99px;overflow:hidden;margin-bottom:.5rem}
+.aq-progress-bar{height:100%;background:#667eea;border-radius:99px;transition:width .4s ease}
+.aq-progress-meta{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:#6b7280;margin-bottom:1.5rem;flex-wrap:wrap;gap:.35rem}
+.diff-badge{padding:.2rem .65rem;border-radius:20px;font-size:.75rem;font-weight:600}
+.diff-1{background:#d1fae5;color:#065f46}
+.diff-2{background:#fef9c3;color:#854d0e}
+.diff-3{background:#fee2e2;color:#991b1b}
+.aq-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:2rem;display:flex;flex-direction:column;gap:1.25rem}
+.aq-q-num{font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#667eea}
+.aq-q-text{font-size:1.05rem;font-weight:500;line-height:1.6;color:#1f2937}
+.aq-code{background:#1e293b;color:#e2e8f0;padding:1rem;border-radius:8px;font-size:.83rem;overflow-x:auto;margin:0}
+.aq-choices{display:flex;flex-direction:column;gap:.6rem}
+.choice-btn{text-align:left;padding:.75rem 1rem;border:1.5px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer;font-size:.9rem;color:#1f2937;transition:.15s}
+.choice-btn:hover:not(:disabled){background:#f0f4ff;border-color:#667eea}
+.choice-btn.selected{background:#ede9fe;border-color:#667eea;color:#4c1d95}
+.choice-btn.correct{background:#d1fae5!important;border-color:#10b981!important;color:#065f46!important}
+.choice-btn.wrong{background:#fee2e2!important;border-color:#ef4444!important;color:#991b1b!important}
+.choice-btn.confirmed-ok{background:#d1fae5!important;border-color:#10b981!important;color:#065f46!important}
+.choice-btn.confirmed-fail{background:#fee2e2!important;border-color:#ef4444!important;color:#991b1b!important}
+
+/* Разбор ответов */
+.aq-review-title{font-size:1.2rem;font-weight:700;margin-bottom:1rem}
+.aq-rev-card{background:#fff;border:2px solid #e5e7eb;border-radius:14px;padding:1.25rem;margin-bottom:1rem}
+.aq-rev-card.rev-ok{border-color:#6ee7b7;background:#f0fdf4}
+.aq-rev-card.rev-fail{border-color:#fca5a5;background:#fff5f5}
+.rev-header{display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem}
+.rev-num{width:26px;height:26px;border-radius:50%;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.78rem;flex-shrink:0}
+.rev-ok .rev-num{background:#d1fae5;color:#059669}
+.rev-fail .rev-num{background:#fee2e2;color:#dc2626}
+.rev-verdict{font-weight:600;font-size:.88rem}
+.rev-ok .rev-verdict{color:#059669}
+.rev-fail .rev-verdict{color:#dc2626}
+.rev-qtext{font-size:.95rem;line-height:1.6;margin-bottom:.75rem;color:#1f2937}
+.rev-code{background:#1e293b;color:#e2e8f0;padding:.75rem;border-radius:8px;font-size:.82rem;overflow-x:auto;margin-bottom:.75rem}
+.rev-choices{display:flex;flex-direction:column;gap:.4rem;margin-bottom:.5rem}
+.rev-choice{padding:.5rem .85rem;border-radius:8px;font-size:.9rem;background:#f9fafb;border:1.5px solid transparent;display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
+.rev-chosen-ok{background:#d1fae5;border-color:#10b981}
+.rev-chosen-fail{background:#fee2e2;border-color:#ef4444}
+.rev-correct{background:#ecfdf5;border:1.5px dashed #6ee7b7}
+.rev-tag{font-size:.72rem;font-weight:600;white-space:nowrap}
+.rev-tag.ok{color:#059669}
+.rev-tag.fail{color:#dc2626}
+.rev-exp{background:#fffbeb;border-left:4px solid #f59e0b;padding:.6rem .9rem;border-radius:0 8px 8px 0;font-size:.85rem;color:#92400e;margin-top:.25rem}
+.aq-btn{background:#667eea;color:#fff;border:none;padding:.7rem 1.75rem;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;align-self:flex-start}
+.aq-btn:disabled{opacity:.5;cursor:not-allowed}
+.aq-next-btn{background:#10b981;color:#fff;border:none;padding:.7rem 1.75rem;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;align-self:flex-start;display:flex;align-items:center;gap:.5rem}
+.aq-explanation{padding:.75rem 1rem;border-radius:8px;font-size:.88rem;line-height:1.5}
+.expl-ok{background:#d1fae5;color:#065f46;border-left:3px solid #10b981}
+.expl-fail{background:#fee2e2;color:#991b1b;border-left:3px solid #ef4444}
+.aq-result{text-align:center;padding:3rem 2rem;background:#fff;border:1px solid #e5e7eb;border-radius:16px}
+.aq-result-icon{font-size:3.5rem;margin-bottom:.75rem}
+.aq-result h2{font-size:1.6rem;font-weight:700;margin-bottom:.5rem}
+.aq-result p{color:#6b7280;margin-bottom:1.5rem}
+.aq-result-stats{display:flex;gap:2rem;justify-content:center;margin-bottom:1.75rem}
+.aq-stat{display:flex;flex-direction:column;align-items:center;gap:.25rem}
+.aq-stat span{font-size:2rem;font-weight:700;color:#667eea}
+.aq-stat small{font-size:.8rem;color:#6b7280}
+.aq-result-actions{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+.aq-btn-outline{background:transparent;color:#667eea;border:1.5px solid #667eea;padding:.7rem 1.75rem;border-radius:10px;font-size:.95rem;font-weight:600;text-decoration:none;display:inline-block}
+body.dark-mode .aq-card,.aq-result{background:#1e293b;border-color:#334155}
+body.dark-mode .aq-q-text{color:#f1f5f9}
+body.dark-mode .choice-btn{background:#0f172a;border-color:#334155;color:#e2e8f0}
+body.dark-mode .choice-btn:hover:not(:disabled){background:#1e3a5f;border-color:#667eea}
+body.dark-mode .choice-btn.selected{background:#2d1b69;border-color:#818cf8}
+body.dark-mode .aq-progress-bar-wrap{background:#334155}
+</style>
+{% endblock %}

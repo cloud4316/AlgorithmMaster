@@ -1,0 +1,123 @@
+{% extends 'works/base.html' %}
+{% load static %}
+{% block title %}Схема: {{ solution.work.title }}{% endblock %}
+{% block content %}
+<div style="max-width:800px;margin:2rem auto;padding:0 1rem">
+
+  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+    <a href="{% url 'circuit_solutions_list' %}" style="color:#667eea;font-size:.9rem">
+      <i class="fas fa-arrow-left"></i> К списку
+    </a>
+    <h1 style="font-size:1.3rem;font-weight:700;margin:0">
+      {{ solution.work.title }}
+    </h1>
+    <span style="margin-left:auto;padding:.3rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600;
+      {% if solution.status == 'reviewed' %}background:#d1fae5;color:#065f46
+      {% elif solution.status == 'submitted' %}background:#fef9c3;color:#854d0e
+      {% else %}background:#fee2e2;color:#991b1b{% endif %}">
+      {{ solution.get_status_display }}
+    </span>
+  </div>
+
+  <!-- Метаданные -->
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;display:flex;flex-wrap:wrap;gap:1.5rem">
+    <div>
+      <div style="font-size:.75rem;color:#6b7280;margin-bottom:.15rem">Студент</div>
+      <div style="font-weight:600">{{ solution.student.last_name }} {{ solution.student.first_name }}</div>
+    </div>
+    <div>
+      <div style="font-size:.75rem;color:#6b7280;margin-bottom:.15rem">Сдано</div>
+      <div style="font-weight:600">{{ solution.submitted_at|date:"d.m.Y H:i" }}</div>
+    </div>
+    {% if solution.score is not None %}
+    <div>
+      <div style="font-size:.75rem;color:#6b7280;margin-bottom:.15rem">Оценка</div>
+      <div style="font-weight:700;color:#059669;font-size:1.1rem">{{ solution.score }} / {{ solution.work.max_score }}</div>
+    </div>
+    {% endif %}
+    {% if solution.reviewed_at %}
+    <div>
+      <div style="font-size:.75rem;color:#6b7280;margin-bottom:.15rem">Проверено</div>
+      <div style="font-weight:600">{{ solution.reviewed_at|date:"d.m.Y H:i" }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Описание/ссылка студента -->
+  {% if solution.comment %}
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem">
+    <div style="font-size:.8rem;color:#6b7280;margin-bottom:.5rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Описание схемы от студента</div>
+    <div style="font-size:.95rem;line-height:1.65;white-space:pre-wrap">{{ solution.comment }}</div>
+
+    {% if 'wokwi.com' in solution.comment %}
+    <div style="margin-top:.75rem">
+      {% for word in solution.comment.split %}
+        {% if 'wokwi.com' in word %}
+        <a href="{{ word }}" target="_blank" rel="noopener"
+           style="display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .85rem;background:#1a1a2e;color:#7c3aed;border:1px solid #7c3aed;border-radius:7px;font-size:.82rem;font-weight:600;text-decoration:none">
+          <i class="fas fa-external-link-alt"></i> Открыть в Wokwi
+        </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Комментарий преподавателя -->
+  {% if solution.teacher_comment %}
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem">
+    <div style="font-size:.8rem;color:#0369a1;margin-bottom:.5rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em">
+      <i class="fas fa-comment-dots"></i> Комментарий преподавателя
+    </div>
+    <div style="font-size:.95rem;line-height:1.65;white-space:pre-wrap;color:#0c4a6e">{{ solution.teacher_comment }}</div>
+  </div>
+  {% endif %}
+
+  <!-- Форма проверки (только для преподавателя) -->
+  {% if review_mode and request.user.is_staff %}
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.5rem;margin-bottom:1.25rem">
+    <h3 style="font-size:1rem;font-weight:700;margin:0 0 1rem">Оценить работу</h3>
+    <form method="post" action="{% url 'circuit_review' solution.id %}">
+      {% csrf_token %}
+      <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+        <div style="flex:1;min-width:140px">
+          <label style="font-size:.82rem;color:#6b7280;display:block;margin-bottom:.35rem">Статус</label>
+          <select name="status" style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:.5rem .75rem">
+            <option value="reviewed" {% if solution.status == 'reviewed' %}selected{% endif %}>Принято</option>
+            <option value="needs_revision" {% if solution.status == 'needs_revision' %}selected{% endif %}>На доработку</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:140px">
+          <label style="font-size:.82rem;color:#6b7280;display:block;margin-bottom:.35rem">Баллы (макс {{ solution.work.max_score }})</label>
+          <input type="number" name="score" min="0" max="{{ solution.work.max_score }}"
+                 value="{{ solution.score|default:solution.work.max_score }}"
+                 style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:.5rem .75rem">
+        </div>
+      </div>
+      <div style="margin-bottom:1rem">
+        <label style="font-size:.82rem;color:#6b7280;display:block;margin-bottom:.35rem">Комментарий</label>
+        <textarea name="teacher_comment" rows="3"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:.65rem;font-size:.9rem;resize:vertical"
+                  placeholder="Замечания или похвала...">{{ solution.teacher_comment }}</textarea>
+      </div>
+      <button type="submit" style="padding:.55rem 1.5rem;background:#059669;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.9rem">
+        <i class="fas fa-check"></i> Сохранить оценку
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+    <a href="{% url 'circuit_editor_free' %}" style="display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;background:#334155;color:#e2e8f0;border-radius:8px;text-decoration:none;font-size:.88rem">
+      <i class="fas fa-microchip"></i> Открыть симулятор
+    </a>
+    {% if request.user.is_staff %}
+    <a href="{% url 'circuit_solutions_list' %}" style="display:inline-flex;align-items:center;gap:.4rem;padding:.5rem 1rem;background:#667eea;color:#fff;border-radius:8px;text-decoration:none;font-size:.88rem">
+      <i class="fas fa-list"></i> Все решения
+    </a>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

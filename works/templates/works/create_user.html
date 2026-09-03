@@ -1,0 +1,141 @@
+{% extends 'works/base.html' %}
+{% block title %}Создать аккаунт{% endblock %}
+{% block content %}
+<div class="cu-page">
+  <div class="cu-header">
+    <a href="{% url 'admin_panel' %}" class="back-link"><i class="fas fa-arrow-left"></i> Панель преподавателя</a>
+    <h1><i class="fas fa-user-plus"></i> Создать аккаунт</h1>
+  </div>
+
+  {% if error %}
+  <div class="cu-alert cu-alert-error"><i class="fas fa-exclamation-circle"></i> {{ error }}</div>
+  {% endif %}
+
+  <div class="cu-card">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="cu-section-title">Основные данные</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Фамилия <span class="req">*</span></label>
+          <input type="text" name="last_name" class="form-input" placeholder="Иванов" required autofocus>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Имя <span class="req">*</span></label>
+          <input type="text" name="first_name" class="form-input" placeholder="Иван" required>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Группа</label>
+          <input type="text" name="group" class="form-input" placeholder="3РЭУ2">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Временный пароль <span class="req">*</span></label>
+          <div class="pw-wrap">
+            <input type="text" name="password" id="pwInput" class="form-input" placeholder="Минимум 6 символов" minlength="6" required>
+            <button type="button" onclick="generatePw()" class="btn-gen-pw" title="Сгенерировать пароль">
+              <i class="fas fa-dice"></i>
+            </button>
+          </div>
+          <div class="form-hint">Пользователь увидит предложение сменить пароль при первом входе</div>
+        </div>
+      </div>
+
+      <div class="cu-section-title">Роль и доступ</div>
+
+      <div class="form-group">
+        <label class="form-label">Роль</label>
+        <div class="role-selector">
+          <label class="role-opt">
+            <input type="radio" name="role" value="student" checked>
+            <span><i class="fas fa-user-graduate"></i> Студент</span>
+          </label>
+          <label class="role-opt">
+            <input type="radio" name="role" value="teacher">
+            <span><i class="fas fa-chalkboard-teacher"></i> Преподаватель</span>
+          </label>
+        </div>
+        <div class="form-hint">Преподаватель получает доступ к панели управления и журналу оценок</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Доступ к предметам</label>
+        <div class="subjects-grid">
+          {% for subj in subjects %}
+          <label class="subj-check-card">
+            <input type="checkbox" name="subject_ids" value="{{ subj.id }}">
+            <div class="subj-check-inner">
+              <i class="{{ subj.icon }}" style="color:{{ subj.color }};font-size:1.4rem"></i>
+              <span>{{ subj.title }}</span>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+        <div class="form-hint">Если не выбрано ни одного — студент увидит все предметы (стандартное поведение)</div>
+      </div>
+
+      <div class="cu-footer">
+        <a href="{% url 'admin_panel' %}" class="btn-cancel">Отмена</a>
+        <button type="submit" class="btn-create">
+          <i class="fas fa-user-plus"></i> Создать аккаунт
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function generatePw() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let pw = '';
+  for (let i = 0; i < 8; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  const input = document.getElementById('pwInput');
+  input.value = pw;
+  input.select();
+  try { document.execCommand('copy'); } catch(e) {}
+}
+</script>
+
+<style>
+.cu-page{max-width:700px;margin:0 auto;padding:2rem 1rem}
+.cu-header{margin-bottom:1.5rem}
+.back-link{display:inline-flex;align-items:center;gap:.4rem;color:#6b7280;font-size:.88rem;text-decoration:none;margin-bottom:.75rem}
+.back-link:hover{color:#2563eb}
+.cu-header h1{font-size:1.5rem;display:flex;align-items:center;gap:.5rem;margin:0}
+.cu-alert{border-radius:8px;padding:.75rem 1rem;margin-bottom:1.25rem;font-size:.88rem;display:flex;align-items:center;gap:.5rem}
+.cu-alert-error{background:#fee2e2;color:#b91c1c}
+.cu-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:2rem}
+.cu-section-title{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin:1.5rem 0 .75rem;padding-bottom:.4rem;border-bottom:1px solid #f3f4f6}
+.cu-section-title:first-child{margin-top:0}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:.5rem}
+@media(max-width:520px){.form-row{grid-template-columns:1fr}}
+.form-group{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.75rem}
+.form-label{font-size:.85rem;font-weight:600;color:#374151}
+.req{color:#dc2626}
+.form-input{padding:.55rem .8rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.9rem;width:100%;box-sizing:border-box;transition:border-color .15s}
+.form-input:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px #dbeafe}
+.form-hint{font-size:.78rem;color:#9ca3af;margin-top:.1rem}
+.pw-wrap{display:flex;gap:.4rem}
+.pw-wrap .form-input{flex:1}
+.btn-gen-pw{background:#f3f4f6;border:1.5px solid #e5e7eb;border-radius:8px;padding:.5rem .75rem;cursor:pointer;color:#6b7280;font-size:.9rem;white-space:nowrap}
+.btn-gen-pw:hover{background:#e0f2fe;border-color:#7dd3fc;color:#0284c7}
+.role-selector{display:flex;gap:.75rem;flex-wrap:wrap}
+.role-opt{display:flex;align-items:center;gap:.4rem;cursor:pointer;padding:.55rem 1rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.88rem;user-select:none;transition:all .15s}
+.role-opt:has(input:checked){border-color:#2563eb;background:#eff6ff;color:#1d4ed8;font-weight:600}
+.role-opt input{width:14px;height:14px}
+.subjects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:.6rem}
+.subj-check-card{display:block;cursor:pointer}
+.subj-check-card input{display:none}
+.subj-check-inner{display:flex;align-items:center;gap:.6rem;padding:.65rem .9rem;border:1.5px solid #e5e7eb;border-radius:10px;font-size:.88rem;transition:all .15s}
+.subj-check-card:hover .subj-check-inner{border-color:#d1d5db;background:#f9fafb}
+.subj-check-card:has(input:checked) .subj-check-inner{border-color:#2563eb;background:#eff6ff;color:#1d4ed8;font-weight:600}
+.cu-footer{display:flex;justify-content:flex-end;gap:.75rem;margin-top:2rem;padding-top:1.25rem;border-top:1px solid #f3f4f6}
+.btn-cancel{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;padding:.6rem 1.2rem;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:500;text-decoration:none;display:flex;align-items:center}
+.btn-cancel:hover{background:#e5e7eb}
+.btn-create{background:#2563eb;color:#fff;border:none;padding:.6rem 1.4rem;border-radius:8px;cursor:pointer;font-size:.9rem;font-weight:600;display:flex;align-items:center;gap:.4rem}
+.btn-create:hover{background:#1d4ed8}
+</style>
+{% endblock %}

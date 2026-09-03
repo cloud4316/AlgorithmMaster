@@ -1,0 +1,610 @@
+{% extends 'works/base.html' %}
+{% block title %}Песочница — онлайн-компилятор{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<style>
+/* ── Layout ── */
+.pg-wrap {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: calc(100vh - 70px);
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  gap: 0;
+}
+.pg-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .75rem 0;
+  flex-wrap: wrap;
+}
+.pg-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main, #1e293b);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.pg-title i { color: #667eea; }
+
+/* ── Language tabs ── */
+.lang-tabs {
+  display: flex;
+  gap: .35rem;
+  background: var(--card-bg, #f1f5f9);
+  border-radius: 10px;
+  padding: .25rem;
+}
+.lang-tab {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .35rem .8rem;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  font-size: .82rem;
+  font-weight: 500;
+  color: var(--text-muted, #64748b);
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.lang-tab:hover { background: #e2e8f0; color: #334155; }
+.lang-tab.active { background: #667eea; color: #fff; }
+.lang-tab img { width: 16px; height: 16px; border-radius: 3px; }
+
+/* ── Main grid ── */
+.pg-body {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  grid-template-rows: 1fr auto;
+  gap: .75rem;
+  padding-bottom: .75rem;
+  min-height: 0;
+}
+.pg-editor-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: .5rem;
+}
+.pg-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  min-height: 0;
+}
+
+/* ── Editor container ── */
+.editor-wrap {
+  flex: 1;
+  min-height: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+}
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem .75rem;
+  background: #282a36;
+  border-bottom: 1px solid #44475a;
+}
+.editor-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  color: #cdd6f4;
+  font-size: .82rem;
+}
+.editor-topbar .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  display: inline-block;
+}
+.dot-red   { background: #ff5f57; }
+.dot-yellow{ background: #febc2e; }
+.dot-green { background: #28c840; }
+.editor-actions {
+  display: flex;
+  gap: .4rem;
+}
+.btn-action {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .3rem .7rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .8rem;
+  font-weight: 500;
+  transition: background .15s;
+}
+.btn-run {
+  background: #50fa7b;
+  color: #282a36;
+}
+.btn-run:hover { background: #69ff8e; }
+.btn-run:disabled { background: #44475a; color: #6272a4; cursor: not-allowed; }
+.btn-clear { background: #44475a; color: #cdd6f4; }
+.btn-clear:hover { background: #6272a4; }
+.btn-copy2 { background: #44475a; color: #cdd6f4; }
+.btn-copy2:hover { background: #6272a4; }
+
+.CodeMirror {
+  flex: 1;
+  font-family: 'Fira Code', 'Consolas', monospace !important;
+  font-size: .9rem !important;
+  line-height: 1.6 !important;
+  height: 100% !important;
+}
+
+/* ── Side panel ── */
+.panel-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.panel-card-header {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .5rem .75rem;
+  background: var(--card-bg, #f8fafc);
+  border-bottom: 1px solid #e2e8f0;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+}
+.panel-card-header i { color: #667eea; }
+
+.stdin-area {
+  flex: 1;
+  min-height: 80px;
+  max-height: 140px;
+  padding: .6rem .75rem;
+  font-family: 'Fira Code', monospace;
+  font-size: .83rem;
+  resize: vertical;
+  border: none;
+  outline: none;
+  background: var(--card-bg, #fff);
+  color: var(--text-main, #1e293b);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Output ── */
+.output-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.output-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: .75rem;
+  background: #1e1e2e;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: .84rem;
+  line-height: 1.6;
+  color: #cdd6f4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.output-body.error-out { color: #ff5555; }
+.output-body.success-out { color: #50fa7b; }
+.output-placeholder { color: #44475a; font-style: italic; }
+
+/* ── Status bar ── */
+.pg-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .35rem .5rem;
+  font-size: .76rem;
+  color: var(--text-muted, #94a3b8);
+  background: var(--card-bg, #f8fafc);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  display: inline-block;
+}
+.status-dot.running { background: #f59e0b; animation: pulse .8s infinite; }
+.status-dot.ok      { background: #22c55e; }
+.status-dot.err     { background: #ef4444; }
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+
+/* ── Snippets ── */
+.snippets-list {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  padding: .5rem .75rem;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.snippet-btn {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .3rem .5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: .78rem;
+  color: var(--text-main, #374151);
+  text-align: left;
+  transition: background .12s;
+}
+.snippet-btn:hover { background: #f0f4ff; border-color: #667eea; color: #667eea; }
+.snippet-btn i { color: #667eea; font-size: .7rem; }
+
+/* ── Dark mode ── */
+[data-theme="dark"] .panel-card,
+[data-theme="dark"] .panel-card-header,
+[data-theme="dark"] .stdin-area {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+[data-theme="dark"] .lang-tabs { background: #0f172a; }
+[data-theme="dark"] .lang-tab:hover { background: #1e293b; }
+[data-theme="dark"] .pg-statusbar { background: #0f172a; border-color: #334155; }
+
+/* ── Responsive ── */
+@media (max-width: 800px) {
+  .pg-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto auto; }
+  .pg-side-col { flex-direction: row; flex-wrap: wrap; }
+  .panel-card { min-width: 200px; flex: 1; }
+  .output-card { min-height: 200px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pg-wrap">
+  <!-- Header -->
+  <div class="pg-header">
+    <div class="pg-title">
+      <i class="fas fa-terminal"></i> Песочница
+    </div>
+
+    <!-- Language tabs -->
+    <div class="lang-tabs" id="langTabs">
+      <button class="lang-tab {% if default_lang == 'python' %}active{% endif %}"
+              data-lang="python" onclick="switchLang('python', this)">
+        <i class="fab fa-python"></i> Python
+      </button>
+      <button class="lang-tab {% if default_lang == 'cpp' %}active{% endif %}"
+              data-lang="cpp" onclick="switchLang('cpp', this)">
+        <i class="fas fa-code"></i> C++
+      </button>
+      <button class="lang-tab {% if default_lang == 'java' %}active{% endif %}"
+              data-lang="java" onclick="switchLang('java', this)">
+        <i class="fab fa-java"></i> Java
+      </button>
+      <button class="lang-tab {% if default_lang == 'javascript' %}active{% endif %}"
+              data-lang="javascript" onclick="switchLang('javascript', this)">
+        <i class="fab fa-js"></i> JavaScript
+      </button>
+    </div>
+
+    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
+      <span style="font-size:.78rem;color:#94a3b8"><i class="fas fa-keyboard"></i> Ctrl+Enter — запустить</span>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="pg-body">
+    <!-- Editor column -->
+    <div class="pg-editor-col">
+      <div class="editor-wrap">
+        <div class="editor-topbar">
+          <div class="editor-topbar-left">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+            <span id="filenameLabel" style="margin-left:.5rem">main.py</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn-action btn-copy2" onclick="copyEditorCode()" title="Копировать код">
+              <i class="fas fa-copy"></i> Копировать
+            </button>
+            <button class="btn-action btn-clear" onclick="clearEditor()" title="Очистить">
+              <i class="fas fa-trash-alt"></i>
+            </button>
+            <button class="btn-action btn-run" id="runBtn" onclick="runCode()">
+              <i class="fas fa-play"></i> Запустить
+            </button>
+          </div>
+        </div>
+        <textarea id="pgEditor">{{ initial_code }}</textarea>
+      </div>
+
+      <!-- Status bar -->
+      <div class="pg-statusbar">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Готово</span>
+        <span style="margin-left:auto" id="execTime"></span>
+      </div>
+    </div>
+
+    <!-- Side column -->
+    <div class="pg-side-col">
+      <!-- Stdin -->
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <i class="fas fa-keyboard"></i> Входные данные (stdin)
+        </div>
+        <textarea class="stdin-area" id="stdinArea"
+                  placeholder="Введите входные данные…&#10;(каждая строка — отдельная)"></textarea>
+      </div>
+
+      <!-- Output -->
+      <div class="panel-card output-card">
+        <div class="panel-card-header">
+          <i class="fas fa-terminal"></i> Вывод программы
+          <button style="margin-left:auto;background:none;border:none;cursor:pointer;color:#94a3b8;font-size:.75rem"
+                  onclick="clearOutput()" title="Очистить вывод">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="output-body" id="outputBody">
+          <span class="output-placeholder">Нажмите «Запустить» или Ctrl+Enter…</span>
+        </div>
+      </div>
+
+      <!-- Snippets -->
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <i class="fas fa-bolt"></i> Шаблоны
+        </div>
+        <div class="snippets-list" id="snippetsList">
+          <!-- заполняется JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/keymap/sublime.min.js"></script>
+
+<script>
+// ── Snippets per language ───────────────────────────────────────────────────
+const SNIPPETS = {
+  python: [
+    { label: 'Hello World',      code: 'print("Hello, World!")' },
+    { label: 'Ввод числа',       code: 'n = int(input("n = "))\nprint(f"n^2 = {n**2}")' },
+    { label: 'Список',           code: 'nums = list(map(int, input().split()))\nprint(sorted(nums))' },
+    { label: 'Factorial (рек.)', code: 'def fact(n):\n    return 1 if n <= 1 else n * fact(n-1)\n\nn = int(input())\nprint(fact(n))' },
+    { label: 'FizzBuzz',         code: 'for i in range(1, 21):\n    if i % 15 == 0: print("FizzBuzz")\n    elif i % 3 == 0: print("Fizz")\n    elif i % 5 == 0: print("Buzz")\n    else: print(i)' },
+    { label: 'Фибоначчи',        code: 'a, b = 0, 1\nfor _ in range(10):\n    print(a, end=" ")\n    a, b = b, a+b' },
+  ],
+  cpp: [
+    { label: 'Hello World',      code: '#include <iostream>\nusing namespace std;\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}' },
+    { label: 'Ввод/вывод',       code: '#include <iostream>\nusing namespace std;\nint main() {\n    int n;\n    cin >> n;\n    cout << "n^2 = " << n*n << endl;\n    return 0;\n}' },
+    { label: 'Массив + сортировка', code: '#include <iostream>\n#include <vector>\n#include <algorithm>\nusing namespace std;\nint main() {\n    int n; cin >> n;\n    vector<int> v(n);\n    for (int& x : v) cin >> x;\n    sort(v.begin(), v.end());\n    for (int x : v) cout << x << " ";\n    return 0;\n}' },
+    { label: 'Factorial',        code: '#include <iostream>\nusing namespace std;\nlong long fact(int n) {\n    return n <= 1 ? 1 : n * fact(n-1);\n}\nint main() {\n    int n; cin >> n;\n    cout << fact(n) << endl;\n}' },
+    { label: 'FizzBuzz',         code: '#include <iostream>\nusing namespace std;\nint main() {\n    for(int i=1;i<=20;i++) {\n        if(i%15==0) cout<<"FizzBuzz\\n";\n        else if(i%3==0) cout<<"Fizz\\n";\n        else if(i%5==0) cout<<"Buzz\\n";\n        else cout<<i<<"\\n";\n    }\n}' },
+  ],
+  java: [
+    { label: 'Hello World',      code: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}' },
+    { label: 'Ввод числа',       code: 'import java.util.Scanner;\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        int n = sc.nextInt();\n        System.out.println("n^2 = " + n*n);\n    }\n}' },
+    { label: 'Factorial',        code: 'public class Main {\n    static long fact(int n) {\n        return n <= 1 ? 1 : n * fact(n-1);\n    }\n    public static void main(String[] args) {\n        java.util.Scanner sc = new java.util.Scanner(System.in);\n        int n = sc.nextInt();\n        System.out.println(fact(n));\n    }\n}' },
+    { label: 'FizzBuzz',         code: 'public class Main {\n    public static void main(String[] args) {\n        for(int i=1;i<=20;i++) {\n            if(i%15==0) System.out.println("FizzBuzz");\n            else if(i%3==0) System.out.println("Fizz");\n            else if(i%5==0) System.out.println("Buzz");\n            else System.out.println(i);\n        }\n    }\n}' },
+  ],
+  javascript: [
+    { label: 'Hello World',      code: 'console.log("Hello, World!");' },
+    { label: 'Функция',          code: 'function factorial(n) {\n    return n <= 1 ? 1 : n * factorial(n-1);\n}\nconsole.log(factorial(10));' },
+    { label: 'Arrow + map',      code: 'const nums = [1,2,3,4,5];\nconst squares = nums.map(x => x**2);\nconsole.log(squares.join(", "));' },
+    { label: 'FizzBuzz',         code: 'for(let i=1;i<=20;i++) {\n    if(i%15===0) console.log("FizzBuzz");\n    else if(i%3===0) console.log("Fizz");\n    else if(i%5===0) console.log("Buzz");\n    else console.log(i);\n}' },
+    { label: 'async/await',      code: 'async function delay(ms) {\n    return new Promise(r => setTimeout(r, ms));\n}\nasync function main() {\n    console.log("Start");\n    await delay(100);\n    console.log("Done");\n}\nmain();' },
+  ],
+};
+
+// ── CodeMirror modes ────────────────────────────────────────────────────────
+const MODES = {
+  python:     { mode: 'python',     filename: 'main.py' },
+  cpp:        { mode: 'text/x-c++src', filename: 'main.cpp' },
+  java:       { mode: 'text/x-java', filename: 'Main.java' },
+  javascript: { mode: 'javascript',  filename: 'main.js' },
+};
+
+const DEFAULT_CODE = {
+  python:     'print("Hello, World!")',
+  cpp:        '#include <iostream>\nusing namespace std;\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}',
+  java:       'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}',
+  javascript: 'console.log("Hello, World!");',
+};
+
+// ── Editor init ─────────────────────────────────────────────────────────────
+let currentLang = '{{ default_lang|escapejs }}';
+const editor = CodeMirror.fromTextArea(document.getElementById('pgEditor'), {
+  mode: MODES[currentLang].mode,
+  theme: 'dracula',
+  lineNumbers: true,
+  indentUnit: 4,
+  tabSize: 4,
+  indentWithTabs: false,
+  autoCloseBrackets: true,
+  matchBrackets: true,
+  keyMap: 'sublime',
+  extraKeys: {
+    'Tab': cm => cm.replaceSelection('    '),
+    'Ctrl-Enter': () => runCode(),
+    'Cmd-Enter':  () => runCode(),
+  },
+});
+// fill with default if empty
+if (!editor.getValue().trim()) {
+  editor.setValue(DEFAULT_CODE[currentLang] || '');
+}
+editor.setSize('100%', '100%');
+
+// ── Language switch ─────────────────────────────────────────────────────────
+const codeCache = {};
+
+function switchLang(lang, btn) {
+  // save current code
+  codeCache[currentLang] = editor.getValue();
+
+  // switch
+  currentLang = lang;
+  editor.setOption('mode', MODES[lang].mode);
+  document.getElementById('filenameLabel').textContent = MODES[lang].filename;
+
+  // restore or default
+  const restored = codeCache[lang] || DEFAULT_CODE[lang] || '';
+  editor.setValue(restored);
+  editor.clearHistory();
+
+  // update tabs
+  document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+
+  // update snippets
+  renderSnippets(lang);
+  clearOutput();
+}
+
+// ── Snippets ────────────────────────────────────────────────────────────────
+function renderSnippets(lang) {
+  const list = document.getElementById('snippetsList');
+  const snips = SNIPPETS[lang] || [];
+  list.innerHTML = snips.map((s, i) =>
+    `<button class="snippet-btn" onclick="loadSnippet(${i})">
+       <i class="fas fa-chevron-right"></i> ${s.label}
+     </button>`
+  ).join('');
+}
+
+function loadSnippet(idx) {
+  const s = SNIPPETS[currentLang][idx];
+  if (s) {
+    editor.setValue(s.code);
+    editor.focus();
+  }
+}
+
+// ── Run code ────────────────────────────────────────────────────────────────
+let _isRunning = false;
+async function runCode() {
+  if (_isRunning) return;
+  _isRunning = true;
+  const btn = document.getElementById('runBtn');
+  const out  = document.getElementById('outputBody');
+  const dot  = document.getElementById('statusDot');
+  const stat = document.getElementById('statusText');
+  const time = document.getElementById('execTime');
+
+  const code  = editor.getValue().trim();
+  const stdin = document.getElementById('stdinArea').value;
+
+  if (!code) {
+    setOutput('Нет кода для выполнения', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Выполняется…';
+  dot.className = 'status-dot running';
+  stat.textContent = 'Выполняется…';
+  time.textContent = '';
+  out.className = 'output-body';
+  out.textContent = '';
+
+  const t0 = Date.now();
+
+  try {
+    const fd = new FormData();
+    fd.append('code', code);
+    fd.append('language', currentLang);
+    fd.append('stdin', stdin);
+    fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    const resp = await fetch('/api/run-code/', { method: 'POST', body: fd });
+    const data = await resp.json();
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+
+    setOutput(data.output || '(нет вывода)', data.status === 'error' ? 'error' : 'success');
+    dot.className = 'status-dot ' + (data.status === 'error' ? 'err' : 'ok');
+    const cloudBadge = data.via_cloud ? ' <span style="font-size:.7rem;opacity:.7" title="Запущено через Wandbox (облачный компилятор)">☁️ облако</span>' : '';
+    stat.innerHTML = (data.status === 'error' ? 'Ошибка' : 'Выполнено') + cloudBadge;
+    time.textContent = `${elapsed}с`;
+  } catch(e) {
+    setOutput('Ошибка соединения: ' + e, 'error');
+    dot.className = 'status-dot err';
+    stat.textContent = 'Ошибка соединения';
+  }
+
+  _isRunning = false;
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-play"></i> Запустить';
+}
+
+function setOutput(text, type) {
+  const out = document.getElementById('outputBody');
+  out.className = 'output-body' + (type === 'error' ? ' error-out' : ' success-out');
+  out.textContent = text;
+}
+
+function clearOutput() {
+  const out = document.getElementById('outputBody');
+  out.className = 'output-body';
+  out.innerHTML = '<span class="output-placeholder">Нажмите «Запустить» или Ctrl+Enter…</span>';
+  document.getElementById('statusDot').className = 'status-dot';
+  document.getElementById('statusText').textContent = 'Готово';
+  document.getElementById('execTime').textContent = '';
+}
+
+function clearEditor() {
+  if (confirm('Очистить редактор?')) {
+    editor.setValue(DEFAULT_CODE[currentLang] || '');
+    editor.clearHistory();
+    editor.focus();
+  }
+}
+
+function copyEditorCode() {
+  navigator.clipboard.writeText(editor.getValue());
+  const btn = document.querySelector('.btn-copy2');
+  const old = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-check"></i> Скопировано';
+  setTimeout(() => { btn.innerHTML = old; }, 1500);
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+// Если перешли из урока — восстанавливаем код
+const storedCode = sessionStorage.getItem('pg_code_' + currentLang);
+if (storedCode) {
+  editor.setValue(storedCode);
+  sessionStorage.removeItem('pg_code_' + currentLang);
+}
+renderSnippets(currentLang);
+</script>
+{% endblock %}

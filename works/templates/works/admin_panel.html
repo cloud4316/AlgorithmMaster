@@ -1,0 +1,327 @@
+{% extends 'works/base.html' %}
+{% block title %}Панель преподавателя{% endblock %}
+{% block content %}
+<div class="ap-page">
+  <div class="ap-header">
+    <h1><i class="fas fa-chalkboard-teacher"></i> Панель преподавателя</h1>
+    <div class="ap-header-right">
+      <div class="ap-stats">
+        <div class="ap-stat warn">
+          <span class="ap-stat-num">{{ pending|length }}</span>
+          <span class="ap-stat-lbl">Ожидают одобрения</span>
+        </div>
+        <div class="ap-stat ok">
+          <span class="ap-stat-num">{{ approved|length }}</span>
+          <span class="ap-stat-lbl">Активных студентов</span>
+        </div>
+      </div>
+      <a href="{% url 'create_user' %}" class="btn-create-user">
+        <i class="fas fa-user-plus"></i> Создать аккаунт
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+  {% for msg in messages %}
+  <div class="ap-alert ap-alert-{{ msg.tags }}"><i class="fas fa-check-circle"></i> {{ msg }}</div>
+  {% endfor %}
+  {% endif %}
+
+  <!-- Ожидают одобрения -->
+  {% if pending %}
+  <section class="ap-section">
+    <h2 class="ap-section-title"><i class="fas fa-clock" style="color:#d97706"></i> Ожидают одобрения</h2>
+    <div class="ap-table-wrap">
+      <table class="ap-table">
+        <thead>
+          <tr><th>Студент</th><th>Группа</th><th>Дата заявки</th><th>Действия</th></tr>
+        </thead>
+        <tbody>
+          {% for user in pending %}
+          <tr>
+            <td><div class="student-name">{{ user.last_name }} {{ user.first_name }}</div></td>
+            <td>
+              {% with prog=user.userprogress %}
+                {% if prog.group %}<span class="group-badge">{{ prog.group }}</span>{% else %}—{% endif %}
+              {% endwith %}
+            </td>
+            <td>{{ user.date_joined|date:"d.m.Y H:i" }}</td>
+            <td class="action-cell">
+              <form method="post" action="{% url 'approve_user' user.id %}" style="display:inline">
+                {% csrf_token %}
+                <button type="submit" class="btn-approve"><i class="fas fa-check"></i> Одобрить</button>
+              </form>
+              <form method="post" action="{% url 'reject_user' user.id %}" style="display:inline"
+                    onsubmit="return confirm('Отклонить заявку {{ user.last_name }} {{ user.first_name }}?')">
+                {% csrf_token %}
+                <button type="submit" class="btn-reject" title="Отклонить"><i class="fas fa-times"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% else %}
+  <div class="ap-empty"><i class="fas fa-check-double"></i> Нет заявок на одобрение</div>
+  {% endif %}
+
+  <!-- Активные студенты -->
+  <section class="ap-section">
+    <div class="ap-section-header">
+      <h2 class="ap-section-title"><i class="fas fa-users" style="color:#059669"></i> Активные студенты</h2>
+      <input type="text" id="searchInput" placeholder="Поиск по имени или группе…" class="ap-search">
+    </div>
+    {% if approved %}
+    <div class="ap-table-wrap">
+      <table class="ap-table" id="approvedTable">
+        <thead>
+          <tr><th>Студент</th><th>Группа</th><th>Предметы</th><th>Решений</th><th>Ср. балл</th><th>Действия</th></tr>
+        </thead>
+        <tbody>
+          {% for user in approved %}
+          <tr>
+            <td>
+              <div class="student-name">{{ user.last_name }} {{ user.first_name }}</div>
+              <div class="student-login">@{{ user.username }}</div>
+              {% if user.progress and user.progress.must_change_password %}
+                <span class="badge-tmp-pw" title="Ещё не сменил временный пароль"><i class="fas fa-key"></i> временный пароль</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if user.progress and user.progress.group %}
+                <span class="group-badge">{{ user.progress.group }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <div class="subject-list">
+                {% for sa in user.subject_accesses.all %}
+                  <span class="subj-badge role-{{ sa.role }}" title="{{ sa.get_role_display }}">{{ sa.subject.title }}</span>
+                {% empty %}
+                  <span style="color:#9ca3af;font-size:.82rem">нет доступа</span>
+                {% endfor %}
+              </div>
+              <button class="btn-edit-access" onclick="openAccessModal({{ user.id }}, '{{ user.last_name }} {{ user.first_name }}')" title="Изменить доступ к предметам">
+                <i class="fas fa-edit"></i>
+              </button>
+            </td>
+            <td>{{ user.progress.completed_works|default:0 }}</td>
+            <td>
+              {% if user.progress and user.progress.average_score %}
+                {{ user.progress.average_score|floatformat:1 }}
+              {% else %}—{% endif %}
+            </td>
+            <td class="action-cell">
+              <button class="btn-reset-pw" onclick="openResetPwModal({{ user.id }}, '{{ user.last_name }} {{ user.first_name }}')" title="Сбросить пароль">
+                <i class="fas fa-key"></i>
+              </button>
+              <form method="post" action="{% url 'deactivate_user' user.id %}" style="display:inline"
+                    onsubmit="return confirm('Заблокировать {{ user.last_name }} {{ user.first_name }}?')">
+                {% csrf_token %}
+                <button type="submit" class="btn-block" title="Заблокировать">
+                  <i class="fas fa-ban"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="ap-empty"><i class="fas fa-user-slash"></i> Нет активных студентов</div>
+    {% endif %}
+  </section>
+</div>
+
+<!-- Модальное окно: смена доступа к предметам -->
+<div id="accessModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="accessModalTitle"><i class="fas fa-book-open"></i> Доступ к предметам</h3>
+      <button onclick="document.getElementById('accessModal').style.display='none'" class="modal-close">&times;</button>
+    </div>
+    <form id="accessForm" method="post" action="">
+      {% csrf_token %}
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Роль</label>
+          <div class="role-selector">
+            <label class="role-opt">
+              <input type="radio" name="role" value="student" checked>
+              <span><i class="fas fa-user-graduate"></i> Студент</span>
+            </label>
+            <label class="role-opt">
+              <input type="radio" name="role" value="teacher">
+              <span><i class="fas fa-chalkboard-teacher"></i> Преподаватель</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Доступ к предметам</label>
+          <div class="subjects-checkboxes">
+            {% for subj in all_subjects %}
+            <label class="subj-check" data-subj-id="{{ subj.id }}">
+              <input type="checkbox" name="subject_ids" value="{{ subj.id }}">
+              <span style="display:flex;align-items:center;gap:.4rem">
+                <i class="{{ subj.icon }}" style="color:{{ subj.color }}"></i> {{ subj.title }}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="document.getElementById('accessModal').style.display='none'" class="btn-cancel">Отмена</button>
+        <button type="submit" class="btn-save"><i class="fas fa-check"></i> Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Модальное окно: сброс пароля -->
+<div id="resetPwModal" class="modal-overlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-header">
+      <h3 id="resetPwTitle"><i class="fas fa-key"></i> Сбросить пароль</h3>
+      <button onclick="document.getElementById('resetPwModal').style.display='none'" class="modal-close">&times;</button>
+    </div>
+    <form id="resetPwForm" method="post" action="">
+      {% csrf_token %}
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Новый пароль</label>
+          <input type="text" name="new_password" class="form-input" placeholder="Минимум 6 символов" minlength="6" required>
+          <div class="form-hint">Пользователь получит уведомление о смене пароля</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="document.getElementById('resetPwModal').style.display='none'" class="btn-cancel">Отмена</button>
+        <button type="submit" class="btn-danger"><i class="fas fa-key"></i> Сбросить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#approvedTable tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+// Данные о текущих доступах (заполняется из Django)
+const userAccessData = {
+  {% for user in approved %}
+  {{ user.id }}: {
+    role: "{{ user.subject_accesses.first.role|default:'student' }}",
+    subjects: [{% for sa in user.subject_accesses.all %}{{ sa.subject.id }},{% endfor %}]
+  },
+  {% endfor %}
+};
+
+function openAccessModal(userId, userName) {
+  const modal = document.getElementById('accessModal');
+  document.getElementById('accessModalTitle').innerHTML = '<i class="fas fa-book-open"></i> Доступ: ' + userName;
+  document.getElementById('accessForm').action = '/teacher/subject-access/' + userId + '/';
+
+  const data = userAccessData[userId] || {role: 'student', subjects: []};
+  // Установить роль
+  modal.querySelectorAll('input[name=role]').forEach(r => r.checked = (r.value === data.role));
+  // Установить предметы
+  modal.querySelectorAll('input[name=subject_ids]').forEach(cb => {
+    cb.checked = data.subjects.includes(parseInt(cb.value));
+  });
+
+  modal.style.display = 'flex';
+}
+
+function openResetPwModal(userId, userName) {
+  const modal = document.getElementById('resetPwModal');
+  document.getElementById('resetPwTitle').innerHTML = '<i class="fas fa-key"></i> Сброс пароля: ' + userName;
+  document.getElementById('resetPwForm').action = '/teacher/reset-password/' + userId + '/';
+  modal.querySelector('input[name=new_password]').value = '';
+  modal.style.display = 'flex';
+}
+</script>
+
+<style>
+.ap-page{max-width:1100px;margin:0 auto;padding:2rem 1rem}
+.ap-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem}
+.ap-header h1{font-size:1.6rem;display:flex;align-items:center;gap:.5rem;margin:0}
+.ap-header-right{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.ap-stats{display:flex;gap:.75rem}
+.ap-stat{padding:.75rem 1.25rem;border-radius:12px;text-align:center;display:flex;flex-direction:column}
+.ap-stat.warn{background:#fff7ed;color:#92400e}
+.ap-stat.ok{background:#d1fae5;color:#065f46}
+.ap-stat-num{font-size:1.8rem;font-weight:700;line-height:1}
+.ap-stat-lbl{font-size:.75rem;margin-top:.2rem}
+.ap-alert{border-radius:8px;padding:.7rem 1rem;margin-bottom:1rem;font-size:.88rem;display:flex;align-items:center;gap:.5rem}
+.ap-alert-success{background:#d1fae5;color:#065f46}
+.ap-alert-error{background:#fee2e2;color:#b91c1c}
+.ap-section{margin-bottom:2rem}
+.ap-section-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:.75rem}
+.ap-section-title{font-size:1.15rem;display:flex;align-items:center;gap:.5rem;margin:0 0 .75rem}
+.ap-section-header .ap-section-title{margin:0}
+.ap-search{padding:.45rem .8rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.85rem;width:220px}
+.ap-table-wrap{border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+.ap-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.ap-table th{background:#f9fafb;padding:.65rem 1rem;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;white-space:nowrap}
+.ap-table td{padding:.6rem 1rem;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+.ap-table tr:last-child td{border-bottom:none}
+.ap-table tr:hover td{background:#f9fafb}
+.student-name{font-weight:600;color:#1f2937}
+.student-login{font-size:.75rem;color:#9ca3af;margin-top:.1rem}
+.group-badge{background:#eff6ff;color:#1d4ed8;padding:.2rem .6rem;border-radius:20px;font-size:.78rem;font-weight:500}
+.subject-list{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.3rem}
+.subj-badge{padding:.15rem .5rem;border-radius:12px;font-size:.75rem;font-weight:500}
+.subj-badge.role-student{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.subj-badge.role-teacher{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
+.badge-tmp-pw{background:#fef9c3;color:#92400e;border:1px solid #fde68a;border-radius:12px;font-size:.72rem;padding:.15rem .5rem;display:inline-flex;align-items:center;gap:.25rem;margin-top:.15rem}
+.action-cell{display:flex;gap:.4rem;align-items:center;flex-wrap:nowrap}
+.btn-approve{background:#10b981;color:#fff;border:none;padding:.4rem .8rem;border-radius:6px;cursor:pointer;font-size:.82rem;display:flex;align-items:center;gap:.35rem;font-weight:500}
+.btn-approve:hover{background:#059669}
+.btn-reject{background:#fee2e2;color:#dc2626;border:none;padding:.4rem .7rem;border-radius:6px;cursor:pointer;font-size:.82rem}
+.btn-reject:hover{background:#fca5a5}
+.btn-block{background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;padding:.4rem .6rem;border-radius:6px;cursor:pointer;font-size:.82rem}
+.btn-block:hover{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
+.btn-reset-pw{background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:.4rem .6rem;border-radius:6px;cursor:pointer;font-size:.82rem}
+.btn-reset-pw:hover{background:#fde68a}
+.btn-edit-access{background:none;border:none;color:#6b7280;cursor:pointer;font-size:.8rem;padding:.15rem .35rem;border-radius:4px}
+.btn-edit-access:hover{color:#2563eb;background:#eff6ff}
+.btn-create-user{background:#2563eb;color:#fff;padding:.55rem 1rem;border-radius:8px;font-size:.88rem;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:.4rem;white-space:nowrap}
+.btn-create-user:hover{background:#1d4ed8;color:#fff}
+.ap-empty{text-align:center;padding:2rem;color:#9ca3af;font-size:.9rem}
+.ap-empty i{display:block;font-size:2rem;margin-bottom:.5rem}
+
+/* Модальные окна */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem}
+.modal-box{background:#fff;border-radius:16px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:1.2rem 1.5rem;border-bottom:1px solid #e5e7eb}
+.modal-header h3{margin:0;font-size:1rem;display:flex;align-items:center;gap:.5rem}
+.modal-close{background:none;border:none;font-size:1.4rem;color:#9ca3af;cursor:pointer;line-height:1;padding:.1rem .3rem}
+.modal-close:hover{color:#374151}
+.modal-body{padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:1rem}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:.75rem}
+.form-group{display:flex;flex-direction:column;gap:.4rem}
+.form-label{font-size:.85rem;font-weight:600;color:#374151}
+.form-input{padding:.55rem .8rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.9rem;width:100%;box-sizing:border-box}
+.form-input:focus{outline:none;border-color:#2563eb}
+.form-hint{font-size:.78rem;color:#9ca3af}
+.role-selector{display:flex;gap:.75rem}
+.role-opt{display:flex;align-items:center;gap:.35rem;cursor:pointer;padding:.55rem .9rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.85rem;user-select:none}
+.role-opt:has(input:checked){border-color:#2563eb;background:#eff6ff;color:#1d4ed8;font-weight:600}
+.subjects-checkboxes{display:flex;flex-direction:column;gap:.5rem;max-height:200px;overflow-y:auto}
+.subj-check{display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.4rem .6rem;border-radius:6px;font-size:.88rem}
+.subj-check:hover{background:#f9fafb}
+.subj-check input{width:15px;height:15px;cursor:pointer}
+.btn-cancel{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;padding:.5rem 1rem;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:500}
+.btn-cancel:hover{background:#e5e7eb}
+.btn-save{background:#2563eb;color:#fff;border:none;padding:.5rem 1.2rem;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:.35rem}
+.btn-save:hover{background:#1d4ed8}
+.btn-danger{background:#dc2626;color:#fff;border:none;padding:.5rem 1.2rem;border-radius:8px;cursor:pointer;font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:.35rem}
+.btn-danger:hover{background:#b91c1c}
+</style>
+{% endblock %}

@@ -1,0 +1,506 @@
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE.CSS — адаптивные стили для мобильных устройств
+   Подключается ПОСЛЕ design-system.css и main.css
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── 0. Базовые исправления ──────────────────────────────────── */
+
+/* Код-блоки: ВСЕГДА прокрутка по горизонтали.
+   НЕ ставим overflow-x:hidden на html/body — в iOS Safari это
+   убивает вертикальную прокрутку страницы! */
+pre {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: pre;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Изображения и SVG — не вылезают */
+img, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Таблицы — контейнер для прокрутки */
+.theory-table,
+.table,
+table {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ─── .main — отступы на мобилах ────────────────────────────────
+   style.css задаёт padding: 2rem (32px с каждой стороны) и
+   margin-top: 72px. На мобилах шапка = 60px навбар + ~50px
+   строка предметов ≈ 110px. Контент уходил под fixed-хедер!  */
+@media (max-width: 900px) {
+  .main {
+    padding-left:  .5rem !important;
+    padding-right: .5rem !important;
+    padding-bottom: 1rem !important;
+    margin-top: 115px !important;   /* nav 60px + subj-row ~50px + запас 5px */
+  }
+}
+@media (max-width: 480px) {
+  .main {
+    padding-left:  .25rem !important;
+    padding-right: .25rem !important;
+    margin-top: 112px !important;
+  }
+}
+
+/* ─── 1. Info-блок (не был стилизован) ───────────────────────── */
+.info {
+  background: #f0f9ff;
+  border-left: 4px solid #0ea5e9;
+  padding: .75rem 1rem;
+  border-radius: 0 8px 8px 0;
+  margin: 1rem 0;
+  font-size: .9rem;
+  color: #0c4a6e;
+  line-height: 1.6;
+}
+
+/* Тёмная тема */
+body.dark-mode .info {
+  background: #0c2d3f;
+  color: #bae6fd;
+  border-left-color: #38bdf8;
+}
+body.dark-mode .tip {
+  background: #1a1f3d;
+  color: #c7d2fe;
+  border-left-color: #818cf8;
+}
+body.dark-mode .warning {
+  background: #2d1b0e;
+  color: #fed7aa;
+  border-left-color: #fb923c;
+}
+
+/* ─── 2. Навигация на мобилах ────────────────────────────────── */
+@media (max-width: 900px) {
+
+  /* Шапка */
+  .nav-container {
+    padding: 0 1rem !important;
+    height: 60px !important;
+  }
+
+  /* Логотип чуть меньше */
+  .nav-logo {
+    font-size: 1.1rem !important;
+  }
+  .nav-logo i {
+    font-size: 1.3rem !important;
+  }
+
+  /* Мобильное меню */
+  #mobileNavMenu {
+    background: var(--card, #fff);
+    border-top: 1px solid var(--border, #e5e7eb);
+  }
+
+  #mobileNavMenu .nav-link {
+    padding: .8rem 1rem !important;
+    font-size: 1rem !important;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    min-height: 48px;
+  }
+
+  #mobileNavMenu .nav-link:hover,
+  #mobileNavMenu .nav-link:active {
+    background: #f3f4f6;
+  }
+
+  /* Бургер — больше область касания */
+  #nav-burger {
+    padding: .6rem !important;
+    font-size: 1.4rem !important;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* ─── 3. Урок теории ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+
+  /* Боковая панель: открывается ниже fixed-шапки (~115px) */
+  .lesson-sidebar {
+    top: 115px !important;
+    height: calc(100vh - 115px) !important;
+  }
+
+  /* Основная область */
+  .lesson-main {
+    padding: .85rem !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  /* Заголовок урока */
+  .lesson-content h1 {
+    font-size: 1.35rem !important;
+    line-height: 1.3;
+    margin-bottom: .5rem;
+  }
+
+  /* Хлебные крошки */
+  .lesson-topbar {
+    font-size: .78rem;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-bottom: .85rem;
+  }
+
+  /* Тело урока */
+  .theory-body h2 {
+    font-size: 1.1rem !important;
+    margin-top: 1.3rem !important;
+  }
+  .theory-body h3 {
+    font-size: .95rem !important;
+  }
+  .theory-body p {
+    font-size: .93rem;
+    line-height: 1.65;
+  }
+  .theory-body li {
+    font-size: .93rem;
+    line-height: 1.6;
+  }
+
+  /* Код-блоки в теле урока */
+  .theory-body pre {
+    font-size: .8rem !important;
+    padding: .75rem !important;
+    border-radius: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .theory-body pre code {
+    font-size: inherit !important;
+    white-space: pre;
+  }
+
+  /* Inline code */
+  .theory-body code {
+    font-size: .82em;
+    word-break: break-all;
+  }
+
+  /* Таблицы в уроке — прокрутка */
+  .theory-body .theory-table,
+  .theory-body table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Tip / Warning / Info блоки */
+  .tip, .warning, .info {
+    font-size: .85rem !important;
+    padding: .6rem .85rem !important;
+  }
+
+  /* Боковая панель с содержанием */
+  .sidebar-toggle {
+    margin-bottom: .75rem;
+    font-size: .85rem;
+    width: auto;
+    min-height: 40px;
+  }
+
+  /* Навигация между уроками */
+  .lesson-navigation {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-top: 1.5rem;
+  }
+  .lesson-navigation .nav-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: .82rem;
+    padding: .5rem .75rem;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Блок кода с редактором */
+  .code-block-wrap {
+    margin: 1rem 0;
+    border-radius: 8px;
+  }
+  .code-block-header {
+    flex-wrap: wrap;
+    gap: .4rem;
+    padding: .5rem .75rem;
+    font-size: .8rem;
+  }
+  .btn-run-code, .btn-copy, .btn-playground {
+    font-size: .78rem;
+    padding: .28rem .55rem;
+    min-height: 32px;
+  }
+  #outputText {
+    font-size: .8rem;
+  }
+
+  /* Конспект */
+  .notes-block {
+    margin: 1.25rem 0 1rem;
+  }
+  .notes-area {
+    font-size: .88rem;
+    min-height: 80px;
+  }
+}
+
+/* ─── 4. Теория: список модулей ──────────────────────────────── */
+@media (max-width: 900px) {
+
+  .modules-grid {
+    grid-template-columns: 1fr !important;
+    gap: .75rem;
+  }
+
+  .module-card {
+    padding: 1rem !important;
+  }
+
+  .theory-header {
+    flex-direction: column;
+    gap: .6rem;
+    align-items: flex-start;
+  }
+}
+
+/* ─── 5. Главная страница ────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Hero */
+  .hero-main {
+    padding: 1.5rem 0 1rem !important;
+  }
+  .hero-title {
+    font-size: clamp(1.4rem, 6vw, 2rem) !important;
+    line-height: 1.2;
+  }
+  .hero-subtitle {
+    font-size: clamp(1rem, 4vw, 1.25rem) !important;
+  }
+  .hero-description {
+    font-size: .9rem;
+  }
+
+  /* Кнопки — НЕ растягиваем на всю ширину (перебивает style.css) */
+  .btn {
+    width: auto !important;
+    min-height: 44px;
+  }
+  .hero-actions .btn {
+    width: 100% !important;
+    max-width: 320px;
+  }
+
+  /* Секции */
+  .section-surface {
+    margin: 0 .5rem 1.5rem;
+    padding: 1rem;
+    border-radius: 10px;
+  }
+
+  .program-card {
+    padding: 1rem !important;
+  }
+
+  .feature-card {
+    padding: 1rem !important;
+  }
+
+  .stat-item {
+    padding: .85rem !important;
+    flex-direction: row !important;
+    text-align: left !important;
+    gap: .75rem;
+  }
+  .stat-icon {
+    margin-bottom: 0 !important;
+    flex-shrink: 0;
+  }
+}
+
+/* ─── 6. Карточки задач / тестов ─────────────────────────────── */
+@media (max-width: 768px) {
+
+  .works-grid,
+  .quiz-grid {
+    grid-template-columns: 1fr !important;
+    gap: .75rem;
+  }
+
+  .work-card,
+  .quiz-card {
+    padding: 1rem !important;
+  }
+
+  .work-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .work-sidebar {
+    order: -1;
+  }
+}
+
+/* ─── 7. Профиль ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  .profile-header {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+    align-items: center;
+  }
+
+  .stats,
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: .6rem;
+  }
+}
+
+/* ─── 8. Рейтинг ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  .lb-table-wrap,
+  .leaderboard-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lb-stat-cards {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: .6rem;
+  }
+}
+
+/* ─── 9. Формы авторизации ───────────────────────────────────── */
+@media (max-width: 480px) {
+
+  .auth-card,
+  .page-sm {
+    margin: 0 .75rem !important;
+    padding: 1.25rem 1rem !important;
+  }
+
+  .form-input {
+    font-size: 16px !important; /* предотвращает zoom на iOS */
+    min-height: 44px;
+  }
+
+  .btn-primary {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+}
+
+/* ─── 10. Подвал ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  .footer-container {
+    flex-direction: column !important;
+    gap: 1.5rem;
+    padding: 1.5rem 1rem !important;
+    text-align: center;
+  }
+
+  .footer-section {
+    width: 100%;
+  }
+
+  .footer-bottom {
+    padding: .75rem 1rem !important;
+    font-size: .78rem;
+  }
+}
+
+/* ─── 11. Мелкие экраны (< 400px) ───────────────────────────── */
+@media (max-width: 400px) {
+
+  .lesson-main {
+    padding: .65rem !important;
+  }
+
+  .theory-body pre {
+    font-size: .75rem !important;
+    padding: .6rem !important;
+  }
+
+  .theory-body h2 {
+    font-size: 1rem !important;
+  }
+  .theory-body h3 {
+    font-size: .9rem !important;
+  }
+
+  .nav-logo span {
+    display: none; /* только иконка на очень маленьких */
+  }
+  .nav-logo {
+    font-size: 1rem !important;
+  }
+
+  .stats,
+  .stat-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ─── 12. Горизонтальный скролл для таблиц в теле урока ─────── */
+.theory-body table {
+  min-width: 400px;
+}
+.theory-body .table-scroll-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1rem 0;
+}
+
+/* Автоматически оборачиваем все таблицы через CSS-хак */
+@media (max-width: 768px) {
+  .theory-body .theory-table {
+    font-size: .8rem;
+  }
+  .theory-body .theory-table th,
+  .theory-body .theory-table td {
+    padding: .35rem .5rem !important;
+  }
+}
+
+/* ─── 13. Sandbox / playground ───────────────────────────────── */
+@media (max-width: 768px) {
+  .CodeMirror {
+    font-size: .8rem !important;
+  }
+}
+
+/* ─── 14. Кнопка "Отметить изученным" ───────────────────────── */
+@media (max-width: 600px) {
+  .btn-mark-done {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    font-size: .9rem;
+  }
+}

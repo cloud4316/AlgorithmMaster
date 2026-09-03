@@ -1,0 +1,229 @@
+{% extends 'works/base.html' %}
+{% block title %}Тесты — AlgorithmMaster{% endblock %}
+{% block content %}
+<div class="ql-page">
+
+  <!-- ── Шапка ───────────────────────────────────────────── -->
+  <div class="ql-hero">
+    <div class="ql-hero-text">
+      <h1><i class="fas fa-tasks"></i> Тесты по теории</h1>
+      <p>Проверь знания по каждой пройденной теме</p>
+    </div>
+    <div class="ql-hero-stats">
+      <div class="ql-stat">
+        <span class="ql-stat-num">{{ total_quizzes }}</span>
+        <span class="ql-stat-label">всего тестов</span>
+      </div>
+      <div class="ql-stat ql-stat--green">
+        <span class="ql-stat-num">{{ total_passed }}</span>
+        <span class="ql-stat-label">пройдено</span>
+      </div>
+      {% if avg_score %}
+      <div class="ql-stat ql-stat--blue">
+        <span class="ql-stat-num">{{ avg_score }}%</span>
+        <span class="ql-stat-label">средний балл</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Блоки ───────────────────────────────────────────── -->
+  {% if blocks %}
+  {% for block in blocks %}
+  <section class="ql-block" style="--bcolor:{{ block.color }};--bbg:{{ block.bg }}">
+
+    <!-- Заголовок блока -->
+    <div class="ql-block-header">
+      <div class="ql-block-title">
+        <span class="ql-block-icon"><i class="{{ block.icon }}"></i></span>
+        <div>
+          <h2>{{ block.title }}</h2>
+          <span class="ql-block-sub">{{ block.passed }} из {{ block.total }} пройдено</span>
+        </div>
+      </div>
+      <div class="ql-block-progress">
+        <div class="ql-progress-track">
+          <div class="ql-progress-fill" style="width:{{ block.pct }}%"></div>
+        </div>
+        <span class="ql-progress-pct">{{ block.pct }}%</span>
+      </div>
+    </div>
+
+    <!-- Карточки тестов -->
+    <div class="ql-cards">
+      {% for quiz in block.quizzes %}
+      <a href="{% url 'quiz_detail' quiz.id %}" class="ql-card {% if quiz.best_attempt %}{% if quiz.best_attempt.passed %}ql-card--passed{% else %}ql-card--failed{% endif %}{% endif %}">
+
+        <!-- Иконка модуля -->
+        <div class="ql-card-icon">
+          <i class="{{ quiz.module.icon|default:'fas fa-book' }}"></i>
+        </div>
+
+        <!-- Основной контент -->
+        <div class="ql-card-body">
+          <div class="ql-card-top">
+            <span class="ql-card-module">{{ quiz.module.title|truncatechars:30 }}</span>
+            {% if quiz.best_attempt %}
+              {% if quiz.best_attempt.passed %}
+                <span class="ql-badge ql-badge--pass"><i class="fas fa-check"></i> {{ quiz.best_attempt.score }}%</span>
+              {% else %}
+                <span class="ql-badge ql-badge--fail"><i class="fas fa-times"></i> {{ quiz.best_attempt.score }}%</span>
+              {% endif %}
+            {% else %}
+              <span class="ql-badge ql-badge--new">Новый</span>
+            {% endif %}
+          </div>
+          <h3 class="ql-card-title">{{ quiz.title }}</h3>
+          <div class="ql-card-meta">
+            <span><i class="fas fa-question-circle"></i> {{ quiz.questions_count }} вопр.</span>
+            <span><i class="fas fa-award"></i> порог {{ quiz.pass_score }}%</span>
+          </div>
+        </div>
+
+        <!-- Кнопка действия -->
+        <div class="ql-card-action">
+          {% if quiz.best_attempt %}
+            <span class="ql-btn ql-btn--retry"><i class="fas fa-redo"></i></span>
+          {% else %}
+            <span class="ql-btn ql-btn--start"><i class="fas fa-play"></i></span>
+          {% endif %}
+        </div>
+
+      </a>
+      {% endfor %}
+    </div>
+
+  </section>
+  {% endfor %}
+
+  {% else %}
+  <div class="ql-empty">
+    <i class="fas fa-tasks"></i>
+    <h3>Тесты не добавлены</h3>
+    <p>Запусти команду: <code>python manage.py seed_quizzes</code></p>
+  </div>
+  {% endif %}
+
+</div>
+
+<style>
+/* ── Обёртка ─────────────────────────────────────────────── */
+.ql-page{max-width:1100px;margin:0 auto;padding:2rem 1rem}
+
+/* ── Герой-шапка ─────────────────────────────────────────── */
+.ql-hero{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:1.5rem;margin-bottom:2.5rem;
+  background:#fff;border:1px solid #e5e7eb;border-radius:16px;
+  padding:1.5rem 2rem}
+.ql-hero-text h1{font-size:1.6rem;font-weight:700;margin:0 0 .3rem}
+.ql-hero-text p{color:#6b7280;margin:0}
+.ql-hero-stats{display:flex;gap:1.25rem;flex-wrap:wrap}
+.ql-stat{display:flex;flex-direction:column;align-items:center;
+  padding:.75rem 1.25rem;border-radius:12px;background:#f9fafb;
+  border:1px solid #e5e7eb;min-width:80px}
+.ql-stat--green{background:#ecfdf5;border-color:#a7f3d0}
+.ql-stat--blue{background:#eff6ff;border-color:#bfdbfe}
+.ql-stat-num{font-size:1.5rem;font-weight:700;color:#111827;line-height:1.2}
+.ql-stat--green .ql-stat-num{color:#059669}
+.ql-stat--blue  .ql-stat-num{color:#2563eb}
+.ql-stat-label{font-size:.75rem;color:#6b7280;margin-top:.2rem}
+
+/* ── Блок ────────────────────────────────────────────────── */
+.ql-block{margin-bottom:2.5rem}
+
+/* Заголовок блока */
+.ql-block-header{display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:1rem;
+  background:var(--bbg);border:1px solid var(--bcolor);
+  border-radius:14px 14px 0 0;padding:1.1rem 1.5rem;
+  border-bottom:2px solid var(--bcolor)}
+.ql-block-title{display:flex;align-items:center;gap:.9rem}
+.ql-block-icon{width:44px;height:44px;border-radius:12px;
+  background:var(--bcolor);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.15rem;flex-shrink:0}
+.ql-block-title h2{font-size:1.15rem;font-weight:700;margin:0 0 .15rem;color:#111827}
+.ql-block-sub{font-size:.8rem;color:#6b7280}
+.ql-block-progress{display:flex;align-items:center;gap:.6rem}
+.ql-progress-track{width:140px;height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden}
+.ql-progress-fill{height:100%;background:var(--bcolor);border-radius:99px;transition:width .4s}
+.ql-progress-pct{font-size:.8rem;font-weight:600;color:var(--bcolor);min-width:34px;text-align:right}
+
+/* Сетка карточек */
+.ql-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));
+  gap:1px;background:#e5e7eb;
+  border:1px solid #e5e7eb;border-top:none;border-radius:0 0 14px 14px;overflow:hidden}
+
+/* Карточка теста */
+.ql-card{display:flex;align-items:center;gap:1rem;
+  background:#fff;padding:1rem 1.2rem;
+  text-decoration:none;color:inherit;
+  transition:background .15s}
+.ql-card:hover{background:#f9fafb}
+.ql-card--passed{background:#f0fdf4}
+.ql-card--passed:hover{background:#dcfce7}
+.ql-card--failed{background:#fff7f7}
+.ql-card--failed:hover{background:#fee2e2}
+
+/* Иконка */
+.ql-card-icon{width:40px;height:40px;border-radius:10px;
+  background:var(--bbg);color:var(--bcolor);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1rem;flex-shrink:0;
+  border:1px solid var(--bcolor)}
+
+/* Тело */
+.ql-card-body{flex:1;min-width:0}
+.ql-card-top{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.25rem}
+.ql-card-module{font-size:.74rem;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.ql-card-title{font-size:.9rem;font-weight:600;color:#111827;margin:0 0 .3rem;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ql-card-meta{display:flex;gap:.75rem;font-size:.75rem;color:#9ca3af}
+
+/* Бейджи */
+.ql-badge{font-size:.72rem;padding:.15rem .55rem;border-radius:20px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.ql-badge--pass{background:#d1fae5;color:#059669}
+.ql-badge--fail{background:#fee2e2;color:#dc2626}
+.ql-badge--new{background:#eff6ff;color:#3b82f6}
+
+/* Кнопка */
+.ql-card-action{flex-shrink:0}
+.ql-btn{display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;border-radius:8px;font-size:.85rem}
+.ql-btn--start{background:#667eea;color:#fff}
+.ql-btn--retry{background:#e5e7eb;color:#374151}
+.ql-card:hover .ql-btn--start{background:#4f46e5}
+.ql-card:hover .ql-btn--retry{background:#d1d5db}
+
+/* Пустое состояние */
+.ql-empty{text-align:center;padding:4rem 2rem;background:#fff;
+  border:1px solid #e5e7eb;border-radius:16px;color:#9ca3af}
+.ql-empty i{font-size:3rem;display:block;margin-bottom:1rem}
+.ql-empty h3{font-size:1.2rem;color:#374151;margin-bottom:.5rem}
+.ql-empty code{background:#f3f4f6;padding:.2rem .5rem;border-radius:4px;font-size:.85rem}
+
+/* Тёмная тема */
+[data-theme="dark"] .ql-hero,
+[data-theme="dark"] .ql-card{background:#1f2937;border-color:#374151}
+[data-theme="dark"] .ql-hero-text h1,[data-theme="dark"] .ql-card-title{color:#f9fafb}
+[data-theme="dark"] .ql-stat{background:#111827;border-color:#374151}
+[data-theme="dark"] .ql-stat-num{color:#f9fafb}
+[data-theme="dark"] .ql-cards{background:#374151}
+[data-theme="dark"] .ql-card:hover{background:#374151}
+[data-theme="dark"] .ql-card--passed{background:#052e16}
+[data-theme="dark"] .ql-card--failed{background:#450a0a}
+[data-theme="dark"] .ql-btn--retry{background:#374151;color:#d1d5db}
+[data-theme="dark"] .ql-progress-track{background:#374151}
+
+/* Мобильная адаптация */
+@media(max-width:640px){
+  .ql-hero{flex-direction:column;align-items:flex-start;padding:1.2rem}
+  .ql-hero-stats{width:100%;justify-content:space-between}
+  .ql-stat{flex:1;min-width:0}
+  .ql-block-header{flex-direction:column;align-items:flex-start}
+  .ql-progress-track{width:100px}
+  .ql-cards{grid-template-columns:1fr}
+  .ql-card-module{max-width:120px}
+}
+</style>
+{% endblock %}

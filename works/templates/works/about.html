@@ -1,0 +1,125 @@
+{% extends 'works/base.html' %}
+{% block title %}О проекте — AlgorithmMaster{% endblock %}
+{% block content %}
+<div class="about-page">
+
+  <div class="about-hero">
+    <div class="about-hero-icon"><i class="fas fa-graduation-cap"></i></div>
+    <h1 class="about-hero-title">О проекте</h1>
+    <p class="about-hero-sub">Учебная платформа по основам алгоритмизации и программирования</p>
+  </div>
+
+  <div class="about-grid">
+
+    <div class="about-card">
+      <div class="about-card-icon" style="background:#ede9fe;color:#7c3aed"><i class="fas fa-bullseye"></i></div>
+      <h2>Цель проекта</h2>
+      <p>AlgorithmMaster — внутренняя учебная платформа колледжа, созданная для поддержки изучения дисциплин
+         <strong>«Основы алгоритмизации и программирования»</strong> и
+         <strong>«Микропроцессорные системы»</strong>.</p>
+      <p>Платформа позволяет студентам получать теоретические знания, выполнять практические работы
+         и проходить тесты — всё в одном месте, без лишних инструментов.</p>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon" style="background:#d1fae5;color:#065f46"><i class="fas fa-book-open"></i></div>
+      <h2>Что включает платформа</h2>
+      <ul class="about-list">
+        <li><i class="fas fa-check-circle"></i> Теоретические модули с уроками и конспектами</li>
+        <li><i class="fas fa-check-circle"></i> Практические работы с проверкой кода</li>
+        <li><i class="fas fa-check-circle"></i> Тесты с адаптивным режимом сложности</li>
+        <li><i class="fas fa-check-circle"></i> Конструктор электрических схем (МПС)</li>
+        <li><i class="fas fa-check-circle"></i> Онлайн-песочница для запуска Python-кода</li>
+        <li><i class="fas fa-check-circle"></i> Журнал оценок и аналитика для преподавателя</li>
+      </ul>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon" style="background:#fef9c3;color:#854d0e"><i class="fas fa-users"></i></div>
+      <h2>Для кого</h2>
+      <p><strong>Студенты</strong> — изучают теорию, сдают практические работы, видят свой прогресс
+         и получают мгновенную обратную связь от системы и преподавателя.</p>
+      <p><strong>Преподаватель</strong> — управляет группами, проверяет работы, выставляет оценки,
+         просматривает аналитику успеваемости и экспортирует журнал в Excel.</p>
+    </div>
+
+    <div class="about-card">
+      <div class="about-card-icon" style="background:#fee2e2;color:#991b1b"><i class="fas fa-code"></i></div>
+      <h2>Технологии</h2>
+      <ul class="about-list">
+        <li><i class="fab fa-python"></i> Python 3.12 + Django 5</li>
+        <li><i class="fas fa-database"></i> SQLite (локальная сеть колледжа)</li>
+        <li><i class="fas fa-server"></i> Waitress WSGI-сервер</li>
+        <li><i class="fas fa-mobile-alt"></i> PWA — работает офлайн на телефоне</li>
+        <li><i class="fas fa-file-excel"></i> Экспорт отчётов в Excel / CSV</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="about-info-row">
+    <div class="about-info-item">
+      <span class="about-info-num">2</span>
+      <span class="about-info-label">учебных дисциплины</span>
+    </div>
+    <div class="about-info-item">
+      <span class="about-info-num">75+</span>
+      <span class="about-info-label">теоретических уроков</span>
+    </div>
+    <div class="about-info-item">
+      <span class="about-info-num">25</span>
+      <span class="about-info-label">практических работ</span>
+    </div>
+    <div class="about-info-item">
+      <span class="about-info-num">100%</span>
+      <span class="about-info-label">разработано внутри колледжа</span>
+    </div>
+  </div>
+
+  <div class="about-footer-note">
+    <i class="fas fa-info-circle"></i>
+    Платформа работает в локальной сети учебного заведения и не требует подключения к интернету.
+  </div>
+
+</div>
+
+<style>
+.about-page{max-width:1000px;margin:0 auto;padding:2rem 1rem 3rem}
+
+.about-hero{text-align:center;padding:2.5rem 1rem 2rem;margin-bottom:2rem}
+.about-hero-icon{width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem}
+.about-hero-icon i{font-size:2rem;color:#fff}
+.about-hero-title{font-size:2rem;font-weight:700;margin:0 0 .5rem}
+.about-hero-sub{color:#6b7280;font-size:1rem}
+
+.about-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:1.5rem;margin-bottom:2rem}
+
+.about-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:1.75rem;display:flex;flex-direction:column;gap:.75rem}
+.about-card-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:.25rem}
+.about-card-icon i{font-size:1.3rem}
+.about-card h2{font-size:1.1rem;font-weight:700;margin:0}
+.about-card p{color:#4b5563;font-size:.93rem;line-height:1.65;margin:0}
+
+.about-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.5rem}
+.about-list li{display:flex;align-items:center;gap:.6rem;font-size:.92rem;color:#374151}
+.about-list .fa-check-circle{color:#10b981;font-size:.85rem;flex-shrink:0}
+.about-list .fab,.about-list .fas.fa-database,.about-list .fas.fa-server,.about-list .fas.fa-mobile-alt,.about-list .fas.fa-file-excel{color:#667eea;font-size:.85rem;flex-shrink:0;width:14px;text-align:center}
+
+.about-info-row{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;padding:2rem;margin-bottom:1.5rem}
+.about-info-item{display:flex;flex-direction:column;align-items:center;gap:.25rem;flex:1;min-width:140px}
+.about-info-num{font-size:2.2rem;font-weight:800;color:#fff}
+.about-info-label{font-size:.82rem;color:rgba(255,255,255,.8);text-align:center}
+
+.about-footer-note{display:flex;align-items:center;gap:.6rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:.85rem 1.25rem;font-size:.88rem;color:#0369a1}
+.about-footer-note i{font-size:1rem;flex-shrink:0}
+
+body.dark-mode .about-card{background:#1e293b;border-color:#334155}
+body.dark-mode .about-card p,.about-card li{color:#94a3b8}
+body.dark-mode .about-footer-note{background:#0c2a3a;border-color:#0369a1;color:#7dd3fc}
+
+@media(max-width:600px){
+  .about-grid{grid-template-columns:1fr}
+  .about-info-row{flex-direction:column;align-items:center}
+}
+</style>
+{% endblock %}

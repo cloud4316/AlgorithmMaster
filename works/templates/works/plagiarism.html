@@ -1,0 +1,89 @@
+{% extends 'works/base.html' %}
+{% block title %}Проверка плагиата — {{ work.title }}{% endblock %}
+{% block content %}
+<div class="plag-page">
+  <div class="plag-header">
+    <a href="{% url 'solution_history' work.id %}" class="back-link">
+      <i class="fas fa-arrow-left"></i> К истории
+    </a>
+    <div>
+      <h1><i class="fas fa-search"></i> Проверка плагиата</h1>
+      <p class="plag-subtitle">{{ work.title }} &nbsp;·&nbsp; {{ solutions|length }} решений проанализировано</p>
+    </div>
+  </div>
+
+  <form method="get" class="plag-filter">
+    <label>Порог схожести:</label>
+    <input type="range" name="threshold" min="40" max="100" value="{{ threshold }}"
+           oninput="this.nextElementSibling.textContent=this.value+'%'">
+    <span>{{ threshold }}%</span>
+    <button type="submit" class="btn-apply">Применить</button>
+  </form>
+
+  {% if pairs %}
+  <div class="plag-legend">
+    <span class="badge danger">&#9888; 85%+ — высокая вероятность</span>
+    <span class="badge warning">60–84% — подозрительно</span>
+  </div>
+  <div class="plag-list">
+    {% for p in pairs %}
+    <div class="plag-card {{ p.level }}">
+      <div class="plag-pct {{ p.level }}">{{ p.pct }}%</div>
+      <div class="plag-names">
+        <span>{{ p.sol_a.student.last_name }} {{ p.sol_a.student.first_name }}</span>
+        <i class="fas fa-exchange-alt plag-icon"></i>
+        <span>{{ p.sol_b.student.last_name }} {{ p.sol_b.student.first_name }}</span>
+      </div>
+      <div class="plag-dates">
+        {{ p.sol_a.submitted_at|date:"d.m H:i" }} &nbsp;/&nbsp; {{ p.sol_b.submitted_at|date:"d.m H:i" }}
+      </div>
+      <a href="{% url 'solution_diff' p.sol_a.id p.sol_b.id %}" class="btn-diff" target="_blank">
+        <i class="fas fa-code-branch"></i> Diff
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="plag-empty">
+    <i class="fas fa-check-circle"></i>
+    <p>Подозрительных совпадений нет при пороге {{ threshold }}%</p>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+.plag-page{max-width:900px;margin:0 auto;padding:2rem 1rem}
+.plag-header{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.back-link{display:inline-flex;align-items:center;gap:.4rem;color:#667eea;text-decoration:none;font-size:.85rem;margin-top:.2rem;white-space:nowrap}
+.plag-header h1{font-size:1.5rem;font-weight:700;margin:0 0 .2rem}
+.plag-subtitle{color:#6b7280;font-size:.88rem}
+.plag-filter{display:flex;align-items:center;gap:.75rem;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:.75rem 1.25rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.plag-filter label{font-size:.88rem;color:#374151;font-weight:500}
+.plag-filter input[type=range]{flex:1;min-width:120px;max-width:260px}
+.plag-filter span{font-weight:700;min-width:40px;color:#667eea}
+.btn-apply{background:#667eea;color:#fff;border:none;padding:.4rem 1rem;border-radius:8px;cursor:pointer;font-size:.85rem}
+.plag-legend{display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}
+.badge{padding:.3rem .75rem;border-radius:20px;font-size:.78rem;font-weight:500}
+.badge.danger{background:#fee2e2;color:#991b1b}
+.badge.warning{background:#fef9c3;color:#854d0e}
+.plag-list{display:flex;flex-direction:column;gap:.6rem}
+.plag-card{display:flex;align-items:center;gap:1rem;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:.85rem 1.25rem;flex-wrap:wrap}
+.plag-card.danger{border-left:4px solid #ef4444}
+.plag-card.warning{border-left:4px solid #f59e0b}
+.plag-pct{font-size:1.4rem;font-weight:800;min-width:56px;text-align:center}
+.plag-pct.danger{color:#dc2626}
+.plag-pct.warning{color:#d97706}
+.plag-names{flex:1;display:flex;align-items:center;gap:.75rem;font-size:.9rem;font-weight:500;flex-wrap:wrap}
+.plag-icon{color:#9ca3af;font-size:.85rem}
+.plag-dates{font-size:.78rem;color:#9ca3af;min-width:130px}
+.btn-diff{background:#f3f4f6;color:#374151;text-decoration:none;padding:.35rem .85rem;border-radius:8px;font-size:.82rem;display:flex;align-items:center;gap:.35rem;white-space:nowrap}
+.btn-diff:hover{background:#e5e7eb}
+.plag-empty{text-align:center;padding:3rem;color:#6b7280}
+.plag-empty i{font-size:3rem;color:#10b981;display:block;margin-bottom:.75rem}
+body.dark-mode .plag-filter,.plag-card{background:#1e293b;border-color:#334155}
+body.dark-mode .plag-names{color:#f1f5f9}
+body.dark-mode .plag-dates{color:#64748b}
+body.dark-mode .btn-diff{background:#334155;color:#e2e8f0}
+body.dark-mode .btn-apply{background:#667eea}
+</style>
+{% endblock %}

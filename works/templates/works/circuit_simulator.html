@@ -1,0 +1,258 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Симулятор схем{% if work %} — {{ work.title }}{% endif %}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden;font-family:Inter,sans-serif;background:#0f172a}
+
+    .toolbar{
+      display:flex;align-items:center;gap:.4rem;
+      background:#1e293b;border-bottom:1px solid #334155;
+      padding:.4rem .75rem;height:46px;flex-shrink:0;
+    }
+    .toolbar-title{
+      font-size:.9rem;font-weight:600;color:#e2e8f0;
+      margin-right:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;
+    }
+    .sep{width:1px;height:22px;background:#334155;margin:0 .2rem}
+
+    .tb-btn{
+      display:inline-flex;align-items:center;gap:.35rem;
+      padding:.35rem .7rem;border:none;border-radius:6px;cursor:pointer;
+      font-size:.8rem;font-weight:500;text-decoration:none;white-space:nowrap;
+      background:#334155;color:#e2e8f0;transition:.15s;
+    }
+    .tb-btn:hover{background:#475569}
+    .tb-btn.primary{background:#667eea;color:#fff}
+    .tb-btn.primary:hover{background:#5a67d8}
+    .tb-btn.success{background:#059669;color:#fff}
+    .tb-btn.success:hover{background:#047857}
+    .tb-btn.wokwi{background:#1a1a2e;color:#7c3aed;border:1px solid #7c3aed}
+    .tb-btn.wokwi:hover{background:#2d1b69}
+    .tb-btn i{font-size:.8rem}
+
+    .page{display:flex;flex-direction:column;height:100vh}
+    .sim-area{flex:1;position:relative;overflow:hidden}
+
+    #sim-frame{
+      width:100%;height:100%;border:none;display:block;
+    }
+
+    .info-panel{
+      position:absolute;top:10px;right:10px;
+      background:rgba(15,23,42,.92);border:1px solid #334155;
+      border-radius:10px;padding:1rem;width:240px;
+      font-size:.78rem;color:#94a3b8;line-height:1.6;z-index:10;
+    }
+    .info-panel h4{color:#e2e8f0;font-size:.82rem;margin-bottom:.5rem}
+    .info-panel ul{padding-left:1rem}
+    .info-panel li{margin-bottom:.2rem}
+    .info-panel .shortcut{background:#1e293b;border-radius:3px;padding:.1rem .3rem;font-size:.7rem;color:#7dd3fc}
+    .btn-hide-info{
+      position:absolute;top:4px;right:8px;background:none;border:none;
+      color:#64748b;cursor:pointer;font-size:.9rem;
+    }
+
+    .submit-modal{
+      display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+      align-items:center;justify-content:center;z-index:100;
+    }
+    .submit-modal.open{display:flex}
+    .submit-box{
+      background:#1e293b;border:1px solid #334155;border-radius:14px;
+      padding:2rem;max-width:440px;width:90%;
+    }
+    .submit-box h3{color:#f1f5f9;margin-bottom:.5rem}
+    .submit-box p{color:#94a3b8;font-size:.88rem;margin-bottom:1.25rem}
+    .submit-box textarea{
+      width:100%;border-radius:8px;border:1px solid #475569;
+      background:#0f172a;color:#e2e8f0;padding:.65rem;
+      font-size:.85rem;resize:vertical;min-height:80px;
+    }
+    .submit-row{display:flex;gap:.6rem;margin-top:1rem;justify-content:flex-end}
+    .btn-cancel{
+      padding:.5rem 1.1rem;border-radius:7px;background:#334155;
+      color:#e2e8f0;border:none;cursor:pointer;font-size:.85rem;
+    }
+    .btn-send{
+      padding:.5rem 1.25rem;border-radius:7px;background:#059669;
+      color:#fff;border:none;cursor:pointer;font-size:.85rem;font-weight:600;
+    }
+
+    .statusbar{
+      background:#0f172a;border-top:1px solid #1e293b;
+      padding:.25rem .75rem;font-size:.72rem;color:#475569;
+      display:flex;justify-content:space-between;flex-shrink:0;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    {% if work %}
+    <a href="{% url 'work_detail' work.id %}" class="tb-btn" title="Назад к заданию">
+      <i class="fas fa-arrow-left"></i>
+    </a>
+    {% else %}
+    <a href="{% url 'home' %}" class="tb-btn" title="На главную">
+      <i class="fas fa-home"></i>
+    </a>
+    {% endif %}
+
+    <span class="toolbar-title">
+      <i class="fas fa-microchip" style="color:#667eea;margin-right:.3rem"></i>
+      {% if work %}{{ work.title }}{% else %}Симулятор схем{% endif %}
+    </span>
+
+    <div class="sep"></div>
+
+    <button class="tb-btn" onclick="loadBlankArduino()" title="Новая схема Arduino Uno">
+      <i class="fas fa-plus"></i> Arduino Uno
+    </button>
+    <button class="tb-btn" onclick="loadBlankLed()" title="Схема LED + кнопка">
+      <i class="fas fa-lightbulb"></i> LED + кнопка
+    </button>
+
+    <div class="sep"></div>
+
+    <a href="https://wokwi.com/playground/arduino-uno" target="_blank" class="tb-btn wokwi" title="Открыть Wokwi — симулятор с Arduino кодом">
+      <i class="fas fa-external-link-alt"></i> Открыть в Wokwi
+    </a>
+
+    <div class="sep" style="margin-left:auto"></div>
+
+    {% if work %}
+    <button class="tb-btn success" onclick="openSubmit()">
+      <i class="fas fa-paper-plane"></i> Сдать работу
+    </button>
+    {% endif %}
+  </div>
+
+  <!-- Simulator area -->
+  <div class="sim-area">
+    <iframe id="sim-frame" src="" allowfullscreen></iframe>
+
+    <div class="info-panel" id="infoPanel">
+      <button class="btn-hide-info" onclick="document.getElementById('infoPanel').style.display='none'">✕</button>
+      <h4><i class="fas fa-info-circle" style="color:#667eea"></i> Управление симулятором</h4>
+      <ul>
+        <li>Нажми <span class="shortcut">Пробел</span> — пауза/старт</li>
+        <li>Нажми <span class="shortcut">R</span> — сбросить</li>
+        <li>Колесо мыши — масштаб</li>
+        <li>ПКМ на схему — добавить элемент</li>
+        <li>Зажать и тянуть — проводник</li>
+      </ul>
+      <p style="margin-top:.6rem;font-size:.73rem;color:#64748b">
+        Используй меню <b>Draw</b> чтобы добавить компоненты.<br>
+        Для симуляции Arduino кода нажми <b>«Открыть в Wokwi»</b>
+      </p>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="statusbar">
+    <span id="sim-status">Симулятор загружается...</span>
+    <span>
+      {% if work %}ПР №{{ work.order }}: {{ work.title }} · {% endif %}
+      CircuitJS (Falstad) · <a href="https://wokwi.com" target="_blank" style="color:#667eea">Wokwi</a> для Arduino-кода
+    </span>
+  </div>
+
+</div>
+
+<!-- Submit modal -->
+{% if work %}
+<div class="submit-modal" id="submitModal">
+  <div class="submit-box">
+    <h3>Сдать работу</h3>
+    <p>Опиши что ты собрал в схеме и как она работает.
+       Если использовал Wokwi — вставь ссылку на проект.</p>
+    <textarea id="submit-comment" placeholder="Описание схемы, ссылка на Wokwi проект или пояснение..."></textarea>
+    <div class="submit-row">
+      <button class="btn-cancel" onclick="closeSubmit()">Отмена</button>
+      <button class="btn-send" onclick="doSubmit()">
+        <i class="fas fa-paper-plane"></i> Отправить
+      </button>
+    </div>
+  </div>
+</div>
+
+<form id="submit-form" method="post" action="{% url 'circuit_submit' work.id %}" style="display:none">
+  {% csrf_token %}
+  <input type="hidden" name="circuit_json" id="circuit-json-hidden" value='{"type":"simulator","source":"circuitjs"}'>
+  <input type="hidden" name="comment" id="comment-hidden" value="">
+</form>
+{% endif %}
+
+<script>
+// Стартовые схемы для CircuitJS
+const CIRCUITS = {
+  blank: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
+`,
+  arduino_led: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
+v 176 352 176 144 0 0 40 5 0 0 0.5
+r 304 144 432 144 0 330
+l 432 144 432 352 0 0.001 0 0
+w 176 144 304 144 0
+w 432 352 176 352 0
+`,
+  led_button: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
+v 128 400 128 144 0 0 40 5 0 0 0.5
+s 128 144 288 144 0 1 false
+r 288 144 416 144 0 330
+162 416 144 416 304 2 default-led 1 0 0 0.01
+w 416 304 128 400 0
+`,
+};
+
+function buildUrl(circuitDef) {
+  const encoded = btoa(unescape(encodeURIComponent(circuitDef)));
+  return 'https://www.falstad.com/circuit/circuitjs.html?ctz=' + encoded;
+}
+
+function loadCircuit(def) {
+  const frame = document.getElementById('sim-frame');
+  frame.src = buildUrl(def);
+  document.getElementById('sim-status').textContent = 'Симулятор загружен';
+}
+
+function loadBlankArduino() { loadCircuit(CIRCUITS.blank); }
+function loadBlankLed() { loadCircuit(CIRCUITS.led_button); }
+
+// Грузим начальную схему
+window.addEventListener('load', function() {
+  {% if initial_circuit %}
+  loadCircuit({{ initial_circuit|safe }});
+  {% else %}
+  loadCircuit(CIRCUITS.led_button);
+  {% endif %}
+
+  document.getElementById('sim-frame').addEventListener('load', function() {
+    document.getElementById('sim-status').textContent = 'Симулятор работает · нажми Пробел для паузы';
+  });
+});
+
+// Submit
+function openSubmit() { document.getElementById('submitModal').classList.add('open'); }
+function closeSubmit() { document.getElementById('submitModal').classList.remove('open'); }
+
+function doSubmit() {
+  const comment = document.getElementById('submit-comment').value.trim();
+  if (!comment) { alert('Напиши описание схемы или вставь ссылку на Wokwi'); return; }
+  document.getElementById('comment-hidden').value = comment;
+  document.getElementById('submit-form').submit();
+}
+
+document.getElementById('submitModal')?.addEventListener('click', function(e) {
+  if (e.target === this) closeSubmit();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{% extends 'works/base.html' %}
+{% block title %}Сравнение попыток — {{ work.title }}{% endblock %}
+{% block content %}
+<div class="diff-page">
+  <div class="diff-header">
+    <a href="{% url 'solution_history' work.id %}" class="back-link">
+      <i class="fas fa-arrow-left"></i> К истории
+    </a>
+    <h1><i class="fas fa-code-branch"></i> Сравнение попыток</h1>
+    <p class="diff-subtitle">{{ work.title }}</p>
+  </div>
+
+  <div class="diff-meta-row">
+    <div class="diff-meta-card old">
+      <span class="diff-meta-label">Старая</span>
+      <span class="diff-meta-date">{{ sol1.submitted_at|date:"d.m.Y H:i" }}</span>
+      <span class="diff-meta-status status-{{ sol1.status }}">{{ sol1.get_status_display }}</span>
+    </div>
+    <div class="diff-arrow"><i class="fas fa-arrow-right"></i></div>
+    <div class="diff-meta-card new">
+      <span class="diff-meta-label">Новая</span>
+      <span class="diff-meta-date">{{ sol2.submitted_at|date:"d.m.Y H:i" }}</span>
+      <span class="diff-meta-status status-{{ sol2.status }}">{{ sol2.get_status_display }}</span>
+    </div>
+  </div>
+
+  <div class="diff-table-wrap">
+    {{ diff_table|safe }}
+  </div>
+</div>
+
+<style>
+.diff-page{max-width:1200px;margin:0 auto;padding:2rem 1rem}
+.diff-header{margin-bottom:1.5rem}
+.back-link{display:inline-flex;align-items:center;gap:.4rem;color:#667eea;text-decoration:none;font-size:.85rem;margin-bottom:.75rem}
+.diff-header h1{font-size:1.5rem;font-weight:700;margin-bottom:.25rem}
+.diff-subtitle{color:#6b7280;font-size:.9rem}
+.diff-meta-row{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.diff-meta-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:.75rem 1.25rem;display:flex;flex-direction:column;gap:.25rem;flex:1;min-width:200px}
+.diff-meta-card.old{border-left:4px solid #f87171}
+.diff-meta-card.new{border-left:4px solid #34d399}
+.diff-meta-label{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#9ca3af}
+.diff-meta-date{font-size:.9rem;font-weight:600;color:#1f2937}
+.diff-meta-status{font-size:.78rem;color:#6b7280}
+.diff-arrow{color:#9ca3af;font-size:1.2rem;flex-shrink:0}
+.diff-table-wrap{overflow-x:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1rem}
+/* Python difflib HTML output */
+.diff-table-wrap table.diff{width:100%;border-collapse:collapse;font-family:monospace;font-size:.82rem;line-height:1.5}
+.diff-table-wrap td{padding:2px 6px;white-space:pre-wrap;word-break:break-all;vertical-align:top}
+.diff-table-wrap td.diff_header{background:#f3f4f6;color:#6b7280;text-align:right;width:40px;user-select:none;border-right:1px solid #e5e7eb}
+.diff-table-wrap .diff_add{background:#d1fae5}
+.diff-table-wrap .diff_chg{background:#fef3c7}
+.diff-table-wrap .diff_sub{background:#fee2e2}
+.diff-table-wrap span.diff_add{background:#6ee7b7}
+.diff-table-wrap span.diff_chg{background:#fcd34d}
+.diff-table-wrap span.diff_sub{background:#fca5a5}
+body.dark-mode .diff-meta-card{background:#1e293b;border-color:#334155}
+body.dark-mode .diff-meta-date{color:#f1f5f9}
+body.dark-mode .diff-table-wrap{background:#1e293b;border-color:#334155}
+body.dark-mode .diff-table-wrap td.diff_header{background:#0f172a;color:#64748b}
+body.dark-mode .diff-table-wrap .diff_add{background:#064e3b}
+body.dark-mode .diff-table-wrap .diff_chg{background:#78350f}
+body.dark-mode .diff-table-wrap .diff_sub{background:#7f1d1d}
+</style>
+{% endblock %}

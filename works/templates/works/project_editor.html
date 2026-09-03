@@ -1,0 +1,219 @@
+{% extends 'works/base.html' %}
+{% block title %}{% if project %}{{ project.title }}{% else %}Новый проект{% endif %} — Редактор{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+{% endblock %}
+{% block content %}
+<div class="pe-layout">
+
+  <!-- Боковая панель -->
+  <aside class="pe-sidebar">
+    <div class="pe-sidebar-header">
+      <a href="{% url 'project_list' %}" class="pe-back"><i class="fas fa-arrow-left"></i> Мои проекты</a>
+    </div>
+
+    <div class="pe-field">
+      <label>Название</label>
+      <input type="text" id="projTitle" class="pe-input"
+             value="{% if project %}{{ project.title }}{% else %}Мой проект{% endif %}"
+             placeholder="Название проекта">
+    </div>
+
+    <div class="pe-field">
+      <label>Язык</label>
+      <select id="projLang" class="pe-input" onchange="changeLang(this.value)">
+        <option value="python"     {% if project.language == 'python' %}selected{% endif %}>Python</option>
+        <option value="cpp"        {% if project.language == 'cpp' %}selected{% endif %}>C++</option>
+        <option value="java"       {% if project.language == 'java' %}selected{% endif %}>Java</option>
+        <option value="javascript" {% if project.language == 'javascript' %}selected{% endif %}>JavaScript</option>
+        <option value="other"      {% if project.language == 'other' %}selected{% endif %}>Другое</option>
+      </select>
+    </div>
+
+    {% if subjects %}
+    <div class="pe-field">
+      <label>Предмет</label>
+      <select id="projSubject" class="pe-input">
+        <option value="">— не выбран —</option>
+        {% for s in subjects %}
+        <option value="{{ s.id }}" {% if project.subject_id == s.id %}selected{% endif %}>{{ s.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div class="pe-field">
+      <label>Описание</label>
+      <textarea id="projDesc" class="pe-input pe-textarea"
+                placeholder="Коротко: что делает проект…">{% if project %}{{ project.description }}{% endif %}</textarea>
+    </div>
+
+    <button class="pe-save-btn" id="saveBtn" onclick="saveProject()">
+      <i class="fas fa-save"></i> Сохранить
+    </button>
+    <div class="pe-saved-hint" id="savedHint" style="display:none">
+      <i class="fas fa-check-circle"></i> Сохранено в <span id="savedTime"></span>
+    </div>
+  </aside>
+
+  <!-- Редактор -->
+  <main class="pe-main">
+    <div class="pe-toolbar">
+      <button class="pe-run-btn" id="runBtn" onclick="runCode()">
+        <i class="fas fa-play"></i> Запустить
+      </button>
+      <button class="pe-copy-btn" onclick="copyCode()">
+        <i class="fas fa-copy"></i>
+      </button>
+      <span class="pe-lang-badge" id="langBadge">Python</span>
+    </div>
+    <textarea id="codeEditor">{% if project %}{{ project.code }}{% endif %}</textarea>
+    <div class="pe-output" id="codeOutput" style="display:none">
+      <div class="pe-out-header">
+        <span><i class="fas fa-terminal"></i> Вывод</span>
+        <button onclick="document.getElementById('codeOutput').style.display='none'" class="pe-out-close">✕</button>
+      </div>
+      <pre id="outputText"></pre>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+<script>
+let PROJECT_ID = {% if project %}{{ project.id }}{% else %}null{% endif %};
+let saveTimer = null;
+
+const CM_MODES = {
+  python: 'python', cpp: 'text/x-c++src', java: 'text/x-java',
+  javascript: 'javascript', other: 'text/plain'
+};
+const LANG_LABELS = {
+  python:'Python', cpp:'C++', java:'Java', javascript:'JavaScript', other:'Другое'
+};
+
+const editor = CodeMirror.fromTextArea(document.getElementById('codeEditor'), {
+  mode: CM_MODES[document.getElementById('projLang').value] || 'python',
+  theme: 'dracula',
+  lineNumbers: true,
+  indentUnit: 4, tabSize: 4, indentWithTabs: false,
+  extraKeys: {"Tab": cm => cm.replaceSelection("    ")},
+});
+editor.setSize('100%', '100%');
+
+// Автосохранение через 2 с после изменения
+editor.on('change', () => {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveProject(true), 2000);
+});
+
+function changeLang(lang) {
+  editor.setOption('mode', CM_MODES[lang] || 'python');
+  document.getElementById('langBadge').textContent = LANG_LABELS[lang] || lang;
+}
+
+function saveProject(auto = false) {
+  const btn = document.getElementById('saveBtn');
+  if (!auto) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Сохраняем...'; }
+  fetch('/api/projects/save/', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token }}'},
+    body: JSON.stringify({
+      id: PROJECT_ID,
+      title: document.getElementById('projTitle').value.trim() || 'Без названия',
+      code: editor.getValue(),
+      language: document.getElementById('projLang').value,
+      description: document.getElementById('projDesc').value,
+      subject_id: document.getElementById('projSubject')?.value || null,
+    })
+  }).then(r => r.json()).then(d => {
+    if (d.status === 'ok') {
+      PROJECT_ID = d.id;
+      // Обновляем URL без перезагрузки
+      history.replaceState({}, '', '/projects/' + PROJECT_ID + '/');
+      document.getElementById('savedTime').textContent = d.saved_at;
+      const hint = document.getElementById('savedHint');
+      hint.style.display = 'flex';
+      setTimeout(() => { hint.style.display = 'none'; }, 3000);
+    }
+  }).finally(() => {
+    if (!auto) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Сохранить'; }
+  });
+}
+
+async function runCode() {
+  const btn = document.getElementById('runBtn');
+  const output = document.getElementById('codeOutput');
+  const text = document.getElementById('outputText');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  output.style.display = 'block';
+  text.textContent = 'Выполняется...';
+  text.className = '';
+  try {
+    const fd = new FormData();
+    fd.append('code', editor.getValue());
+    fd.append('language', document.getElementById('projLang').value);
+    fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    const resp = await fetch('/api/run-code/', {method:'POST', body: fd});
+    const data = await resp.json();
+    text.textContent = data.output || '(нет вывода)';
+    text.className = data.status === 'error' ? 'error-output' : '';
+  } catch(e) {
+    text.textContent = 'Ошибка соединения';
+    text.className = 'error-output';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-play"></i> Запустить';
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(editor.getValue());
+  const btn = document.querySelector('.pe-copy-btn');
+  btn.innerHTML = '<i class="fas fa-check"></i>';
+  setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i>'; }, 1500);
+}
+
+// Предупреждение об уходе без сохранения
+window.addEventListener('beforeunload', e => {
+  if (saveTimer) { e.preventDefault(); e.returnValue = ''; }
+});
+</script>
+
+<style>
+.pe-layout{display:grid;grid-template-columns:260px 1fr;height:calc(100vh - 70px);overflow:hidden}
+.pe-sidebar{background:#f9fafb;border-right:1px solid #e5e7eb;padding:1.25rem;display:flex;flex-direction:column;gap:.85rem;overflow-y:auto}
+.pe-back{display:inline-flex;align-items:center;gap:.4rem;color:#667eea;text-decoration:none;font-size:.83rem}
+.pe-field label{display:block;font-size:.75rem;font-weight:600;color:#6b7280;letter-spacing:.05em;text-transform:uppercase;margin-bottom:.3rem}
+.pe-input{width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:.45rem .7rem;font-size:.88rem;background:#fff;color:#1f2937;box-sizing:border-box}
+.pe-input:focus{outline:none;border-color:#667eea}
+.pe-textarea{min-height:72px;resize:vertical;font-family:inherit}
+.pe-save-btn{background:#667eea;color:#fff;border:none;padding:.65rem;border-radius:10px;font-size:.9rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%}
+.pe-save-btn:hover{background:#5a67d8}
+.pe-save-btn:disabled{opacity:.6;cursor:not-allowed}
+.pe-saved-hint{font-size:.8rem;color:#059669;display:flex;align-items:center;gap:.4rem;justify-content:center;background:#d1fae5;border-radius:8px;padding:.4rem}
+.pe-main{display:flex;flex-direction:column;overflow:hidden;position:relative}
+.pe-toolbar{background:#282a36;padding:.5rem 1rem;display:flex;align-items:center;gap:.6rem}
+.pe-run-btn{background:#50fa7b;color:#282a36;border:none;padding:.35rem .9rem;border-radius:6px;cursor:pointer;font-size:.83rem;font-weight:700;display:flex;align-items:center;gap:.4rem}
+.pe-run-btn:hover{background:#69ff94}
+.pe-copy-btn{background:transparent;border:1px solid #6272a4;color:#f8f8f2;border-radius:6px;padding:.35rem .6rem;cursor:pointer;font-size:.83rem}
+.pe-lang-badge{font-size:.75rem;color:#8be9fd;font-weight:600;margin-left:auto}
+.CodeMirror{flex:1;font-size:.9rem;height:100%!important}
+.pe-output{background:#1e1e2e;border-top:1px solid #374151;max-height:220px;display:flex;flex-direction:column}
+.pe-out-header{background:#282a36;padding:.4rem 1rem;display:flex;justify-content:space-between;align-items:center;color:#6272a4;font-size:.8rem}
+.pe-out-close{background:none;border:none;color:#6272a4;cursor:pointer;font-size:.9rem}
+#outputText{padding:.75rem 1rem;color:#f8f8f2;font-family:monospace;font-size:.85rem;white-space:pre-wrap;margin:0;overflow-y:auto;max-height:160px}
+#outputText.error-output{color:#ff5555}
+@media(max-width:768px){
+  .pe-layout{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .pe-sidebar{max-height:300px}
+  .pe-layout{height:auto}
+}
+body.dark-mode .pe-sidebar{background:#1e293b;border-color:#334155}
+body.dark-mode .pe-input{background:#0f172a;border-color:#334155;color:#e2e8f0}
+body.dark-mode .pe-field label{color:#94a3b8}
+</style>
+{% endblock %}
