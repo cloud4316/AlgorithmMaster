@@ -24,3 +24,5 @@ services:
         value: "3.12.7"
       - key: RENDER
         value: "1"
+      - key: LOAD_FIXTURE
+        value: "1"
