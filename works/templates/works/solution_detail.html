@@ -44,7 +44,7 @@
                 </div>
                 <div class="status-content">
                     <span class="status-text">{{ solution.get_status_display }}</span>
-                    <span class="score">{{ solution.score }}/{{ solution.work.max_score }} баллов</span>
+                    <span class="score">{{ solution.score_points }}/{{ solution.work.max_score }} баллов</span>
                 </div>
             </div>
         </div>
@@ -58,15 +58,15 @@
                 <div class="detail-grid">
                     <div class="detail-item">
                         <span class="label">Файл:</span>
-                        <span class="value">{{ solution.code_file.name }}</span>
+                        <span class="value" style="word-break:break-all;font-size:.85rem">{{ solution.original_filename|default:solution.code_file.name }}</span>
                     </div>
                     <div class="detail-item">
                         <span class="label">Статус:</span>
-                        <span class="value status-{{ solution.status }}">{{ solution.get_status_display }}</span>
+                        <span class="status-badge status-badge-{{ solution.status }}">{{ solution.get_status_display }}</span>
                     </div>
                     <div class="detail-item">
                         <span class="label">Баллы:</span>
-                        <span class="value">{{ solution.score }}/{{ solution.work.max_score }}</span>
+                        <span class="value">{{ solution.score_points }}/{{ solution.work.max_score }}</span>
                     </div>
                     {% if solution.execution_time %}
                     <div class="detail-item">
@@ -93,46 +93,201 @@
             </div>
             {% endif %}
 
-            <!-- Результаты тестов -->
-            {% if solution.test_results and solution.test_results.details %}
-            <div class="tests-card">
-                <h3><i class="fas fa-vial"></i> Результаты тестирования</h3>
-                
-                <div class="tests-summary">
-                    <div class="test-stat">
-                        <span class="stat-number">{{ solution.test_results.passed }}/{{ solution.test_results.total }}</span>
-                        <span class="stat-label">тестов пройдено</span>
-                    </div>
-                    <div class="test-stat">
-                        <span class="stat-number">{{ solution.test_results.passed|floatformat:0 }}%</span>
-                        <span class="stat-label">успешных</span>
-                    </div>
-                </div>
-
-                <div class="tests-details">
-                    <h4>Детали тестов:</h4>
-                    {% for test in solution.test_results.details %}
-                    <div class="test-item {% if test.status == 'passed' %}passed{% else %}failed{% endif %}">
-                        <div class="test-status">
-                            {% if test.status == 'passed' %}
-                            <i class="fas fa-check"></i>
-                            {% else %}
-                            <i class="fas fa-times"></i>
-                            {% endif %}
-                        </div>
-                        <div class="test-info">
-                            <span class="test-name">{{ test.test }}</span>
-                            {% if test.message %}
-                            <span class="test-message">{{ test.message }}</span>
-                            {% endif %}
-                        </div>
-                    </div>
+            {% if is_teacher %}
+            <!-- Антиплагиат -->
+            <div class="comment-card" id="plagiarismCard">
+              <h3 style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+                <span><i class="fas fa-shield-alt"></i> Антиплагиат</span>
+                {% if solution.similarity_score is not None %}
+                  {% if solution.similarity_score >= 80 %}
+                    <span style="background:#fee2e2;color:#991b1b;padding:.2rem .6rem;border-radius:20px;font-size:.8rem;font-weight:700">{{ solution.similarity_score|floatformat:1 }}% — Высокая схожесть</span>
+                  {% elif solution.similarity_score >= 55 %}
+                    <span style="background:#fef3c7;color:#92400e;padding:.2rem .6rem;border-radius:20px;font-size:.8rem;font-weight:700">{{ solution.similarity_score|floatformat:1 }}% — Подозрительно</span>
+                  {% else %}
+                    <span style="background:#d1fae5;color:#065f46;padding:.2rem .6rem;border-radius:20px;font-size:.8rem;font-weight:700">{{ solution.similarity_score|floatformat:1 }}% — Ок</span>
+                  {% endif %}
+                {% endif %}
+                <button onclick="runPlagiarismCheck()" id="plagBtn"
+                        style="margin-left:auto;background:#667eea;color:#fff;border:none;padding:.4rem 1rem;border-radius:8px;font-size:.83rem;cursor:pointer;font-weight:600">
+                  <i class="fas fa-sync-alt"></i> Проверить
+                </button>
+              </h3>
+              <div id="plagResult">
+                {% if solution.similarity_matches %}
+                  <table style="width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem">
+                    <thead><tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+                      <th style="padding:.5rem .75rem;text-align:left">Студент</th>
+                      <th style="padding:.5rem .75rem;text-align:center">Схожесть</th>
+                      <th style="padding:.5rem .75rem;text-align:center">Решение</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for m in solution.similarity_matches %}
+                    <tr style="border-bottom:1px solid #f3f4f6">
+                      <td style="padding:.5rem .75rem;font-weight:500">{{ m.student_name }}</td>
+                      <td style="padding:.5rem .75rem;text-align:center;font-weight:700;color:{% if m.score >= 80 %}#dc2626{% elif m.score >= 55 %}#d97706{% else %}#059669{% endif %}">{{ m.score }}%</td>
+                      <td style="padding:.5rem .75rem;text-align:center"><a href="{% url 'solution_detail' m.solution_id %}" style="color:#667eea" target="_blank">Открыть</a></td>
+                    </tr>
                     {% endfor %}
+                    </tbody>
+                  </table>
+                {% elif solution.similarity_score is not None %}
+                  <p style="color:#6b7280;font-size:.85rem;margin:.5rem 0 0">Совпадений не найдено (все пары ниже порога 40%).</p>
+                {% else %}
+                  <p style="color:#9ca3af;font-size:.85rem;margin:.5rem 0 0">Нажмите «Проверить» для сравнения с другими решениями этой работы.</p>
+                {% endif %}
+              </div>
+            </div>
+            <script>
+            function runPlagiarismCheck() {
+              const btn = document.getElementById('plagBtn');
+              btn.disabled = true;
+              btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Проверяю...';
+              const csrf = document.cookie.match(/csrftoken=([^;]+)/);
+              const fd = new FormData();
+              fd.append('csrfmiddlewaretoken', csrf ? csrf[1] : '');
+              fetch('{% url "check_plagiarism" solution.id %}', {method:'POST', body:fd})
+                .then(r => r.json())
+                .then(data => {
+                  if (data.error) { alert(data.error); btn.disabled=false; btn.innerHTML='<i class="fas fa-sync-alt"></i> Проверить'; return; }
+                  const res = document.getElementById('plagResult');
+                  const pct = data.max_score;
+                  let badge = '';
+                  if (pct >= 80) badge = `<span style="background:#fee2e2;color:#991b1b;padding:.2rem .6rem;border-radius:20px;font-size:.8rem;font-weight:700">${pct.toFixed(1)}% — Высокая схожесть</span>`;
+                  else if (pct >= 55) badge = `<span style="background:#fef3c7;color:#92400e;padding:.2rem .6rem;border-radius:20px;font-size:.8rem;font-weight:700">${pct.toFixed(1)}% — Подозрительно</span>`;
+                  else badge = `<span style="background:#d1fae5;color:#065f46;padding:.2rem .6rem;border-radius:20px;font-size:.8rem;font-weight:700">${pct.toFixed(1)}% — Ок</span>`;
+                  document.querySelector('#plagiarismCard h3 span:first-child').insertAdjacentHTML('afterend', ' ' + badge);
+                  if (data.matches.length) {
+                    let rows = data.matches.map(m => {
+                      const c = m.score >= 80 ? '#dc2626' : m.score >= 55 ? '#d97706' : '#059669';
+                      return `<tr style="border-bottom:1px solid #f3f4f6">
+                        <td style="padding:.5rem .75rem;font-weight:500">${m.student_name}</td>
+                        <td style="padding:.5rem .75rem;text-align:center;font-weight:700;color:${c}">${m.score}%</td>
+                        <td style="padding:.5rem .75rem;text-align:center"><a href="/solution/${m.solution_id}/" style="color:#667eea" target="_blank">Открыть</a></td>
+                      </tr>`;
+                    }).join('');
+                    res.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.5rem">
+                      <thead><tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+                        <th style="padding:.5rem .75rem;text-align:left">Студент</th>
+                        <th style="padding:.5rem .75rem;text-align:center">Схожесть</th>
+                        <th style="padding:.5rem .75rem;text-align:center">Решение</th>
+                      </tr></thead><tbody>${rows}</tbody></table>`;
+                  } else {
+                    res.innerHTML = '<p style="color:#6b7280;font-size:.85rem;margin:.5rem 0 0">Совпадений не найдено (все пары ниже порога 40%).</p>';
+                  }
+                  btn.innerHTML = '<i class="fas fa-check"></i> Готово';
+                })
+                .catch(() => { btn.disabled=false; btn.innerHTML='<i class="fas fa-sync-alt"></i> Проверить'; });
+            }
+            </script>
+            {% endif %}
+
+            <!-- Результаты тестов -->
+            {% if solution.test_results and solution.test_results.tests %}
+            <div class="tests-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem">
+                <h3 style="font-size:.95rem;margin:0 0 .75rem;display:flex;align-items:center;gap:.5rem">
+                  <i class="fas fa-vial" style="color:#667eea"></i> Результаты тестирования
+                  <span style="margin-left:auto;font-size:.82rem;font-weight:400;color:#6b7280">
+                    {{ solution.test_results.passed }}/{{ solution.test_results.total }} прошло
+                  </span>
+                </h3>
+                <div style="background:#f9fafb;border-radius:6px;overflow:hidden;border:1px solid #e5e7eb">
+                {% for test in solution.test_results.tests %}
+                <div style="display:grid;grid-template-columns:32px 1fr;border-bottom:1px solid #f3f4f6;font-size:.83rem">
+                  <div style="padding:.5rem;display:flex;align-items:flex-start;justify-content:center;padding-top:.6rem">
+                    {% if test.ok %}<i class="fas fa-check" style="color:#10b981"></i>{% else %}<i class="fas fa-times" style="color:#ef4444"></i>{% endif %}
+                  </div>
+                  <div style="padding:.5rem .75rem">
+                    <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+                      {% if test.input %}<div><span style="color:#9ca3af;font-size:.78rem">Вход:</span><br><code style="font-size:.8rem;word-break:break-all">{{ test.input|truncatechars:80 }}</code></div>{% endif %}
+                      {% if test.expected %}<div><span style="color:#9ca3af;font-size:.78rem">Ожидалось:</span><br><code style="font-size:.8rem;color:#059669">{{ test.expected|truncatechars:80 }}</code></div>{% endif %}
+                      {% if test.actual %}<div><span style="color:#9ca3af;font-size:.78rem">Получено:</span><br><code style="font-size:.8rem;color:{% if test.ok %}#059669{% else %}#dc2626{% endif %}">{{ test.actual|truncatechars:80 }}</code></div>{% endif %}
+                      {% if test.output and not test.actual %}<div><span style="color:#9ca3af;font-size:.78rem">Вывод:</span><br><code style="font-size:.8rem">{{ test.output|truncatechars:80 }}</code></div>{% endif %}
+                      {% if test.error %}<div style="color:#dc2626;font-size:.8rem"><span style="color:#9ca3af;font-size:.78rem">Ошибка:</span><br><code>{{ test.error|truncatechars:120 }}</code></div>{% endif %}
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
                 </div>
             </div>
             {% endif %}
 
             <!-- Автопроверка кода -->
+            {% if is_doc_file %}
+            <div class="autocheck-card" style="border-left:4px solid #667eea">
+                {% with cc=last_check %}
+                {% if cc and cc.status == 'completed' %}
+                <h3><i class="fas fa-robot" style="color:#667eea"></i> Предварительная оценка ИИ</h3>
+                {% if cc.warnings %}{% with meta=cc.warnings.0 %}
+                <p style="color:#6b7280;font-size:.82rem;margin:.25rem 0 .5rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:.35rem .6rem">
+                  <i class="fas fa-info-circle"></i>
+                  Текст: <strong>{{ meta.text_score|default:"—" }}/70</strong>
+                  &nbsp;·&nbsp;
+                  Рисунки (LLaVA): <strong>{{ meta.image_score|default:"—" }}/30</strong>
+                  {% if meta.images_found %}&nbsp;· найдено рис.: {{ meta.images_found }}{% endif %}
+                </p>
+                {% endwith %}{% endif %}
+                <div style="margin:.5rem 0">
+                  <span style="font-size:1.4rem;font-weight:700;color:{% if cc.score >= 70 %}#10b981{% elif cc.score >= 50 %}#f59e0b{% else %}#ef4444{% endif %}">
+                    {{ cc.score }}/100
+                  </span>
+                  <span style="color:#6b7280;font-size:.85rem;margin-left:.5rem">
+                    {% if cc.score >= 90 %}Отлично{% elif cc.score >= 70 %}Хорошо{% elif cc.score >= 50 %}Удовлетворительно{% else %}Неудовлетворительно{% endif %}
+                  </span>
+                </div>
+                {% if cc.feedback %}<p style="margin:.5rem 0;font-size:.92rem">{{ cc.feedback }}</p>{% endif %}
+                {% if cc.errors %}
+                <div style="margin-top:.5rem">
+                  <strong style="font-size:.85rem;color:#ef4444">Замечания:</strong>
+                  <ul style="margin:.3rem 0 0 1.2rem;font-size:.88rem">
+                    {% for e in cc.errors %}<li>{{ e }}</li>{% endfor %}
+                  </ul>
+                </div>
+                {% endif %}
+                {% if cc.suggestions %}
+                <div style="margin-top:.5rem">
+                  <strong style="font-size:.85rem;color:#f59e0b">Рекомендации:</strong>
+                  <ul style="margin:.3rem 0 0 1.2rem;font-size:.88rem">
+                    {% for s in cc.suggestions %}<li>{{ s }}</li>{% endfor %}
+                  </ul>
+                </div>
+                {% endif %}
+                {% elif cc and cc.status == 'in_progress' %}
+                <h3><i class="fas fa-spinner fa-spin" style="color:#667eea"></i> ИИ проверяет отчёт…</h3>
+                <p style="color:#6b7280;font-size:.9rem;margin:0" id="recheckStatus">Страница обновится автоматически когда проверка завершится.</p>
+                <script>
+                (function(){
+                    var checkId = {{ cc.id }};
+                    var interval = setInterval(function(){
+                        fetch('/api/check-status/' + checkId + '/')
+                            .then(function(r){ return r.json(); })
+                            .then(function(data){
+                                if(data.check_status === 'completed' || data.check_status === 'failed'){
+                                    clearInterval(interval);
+                                    location.reload();
+                                }
+                            })
+                            .catch(function(){ clearInterval(interval); });
+                    }, 5000);
+                })();
+                </script>
+                {% else %}
+                <h3><i class="fas fa-file-word" style="color:#667eea"></i> Отчёт получен</h3>
+                <p style="color:#6b7280;font-size:.9rem;margin:0">ИИ-проверка запускается автоматически. Обновите страницу через минуту.</p>
+                {% endif %}
+                {% endwith %}
+                <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                  <a href="{{ solution.code_file.url }}" download class="btn btn-ghost btn-sm">
+                    <i class="fas fa-download"></i> Скачать отчёт ({{ solution.original_filename|default:"файл" }})
+                  </a>
+                  {% if is_teacher %}
+                  <button id="recheckDocBtn" class="btn btn-ghost btn-sm" style="color:#667eea;border-color:#667eea"
+                    onclick="recheckDoc({{ solution.id }})">
+                    <i class="fas fa-sync-alt"></i> Запустить автопроверку
+                  </button>
+                  {% endif %}
+                </div>
+            </div>
+            {% else %}
             <div class="autocheck-card">
                 <h3><i class="fas fa-robot"></i> Автоматическая проверка</h3>
                 <div class="autocheck-content">
@@ -173,8 +328,10 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
 
             <!-- Исходный код с комментариями к строкам -->
+            {% if not is_doc_file %}
             <div class="code-card">
                 <h3><i class="fas fa-code"></i> Исходный код
                   {% if is_teacher %}<span style="font-size:.78rem;font-weight:400;color:#6b7280;margin-left:.5rem">Нажмите на строку чтобы добавить комментарий</span>{% endif %}
@@ -208,6 +365,35 @@
                     {% endif %}
                 </div>
             </div>
+            {% endif %}{# not is_doc_file — code block #}
+
+            {% if solution_code and not is_doc_file %}
+            <!-- Интерактивная консоль -->
+            <div class="console-card" id="consoleCard">
+                <h3><i class="fas fa-terminal"></i> Консоль
+                    <span style="font-size:.78rem;font-weight:400;color:#6b7280;margin-left:.5rem">Запустить код с вашими данными</span>
+                </h3>
+                <div class="console-body">
+                    <div class="console-stdin-wrap">
+                        <label class="console-label"><i class="fas fa-keyboard"></i> Входные данные (stdin)</label>
+                        <textarea id="consoleStdin" class="console-stdin"
+                            placeholder="Введите входные данные...&#10;Каждая строка — отдельный input()"></textarea>
+                    </div>
+                    <div class="console-actions">
+                        <button id="consoleRunBtn" class="btn-console-run" onclick="runConsole()">
+                            <i class="fas fa-play"></i> Запустить
+                        </button>
+                        <button class="btn-console-clear" onclick="clearConsole()">
+                            <i class="fas fa-trash"></i> Очистить
+                        </button>
+                    </div>
+                    <div class="console-output-wrap">
+                        <label class="console-label"><i class="fas fa-terminal"></i> Вывод</label>
+                        <div id="consoleOutput" class="console-output console-placeholder">Нажмите «Запустить» чтобы увидеть результат</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
 
             {% if is_teacher %}
             <!-- Форма комментария к строке -->
@@ -264,27 +450,15 @@
                 <div class="stats-list">
                     <div class="stat-item">
                         <span class="stat-label">Ваших попыток:</span>
-                        <span class="stat-value">{{ solution.work.solution_set.count }}</span>
+                        <span class="stat-value">{{ user_attempt_count }}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Лучший результат:</span>
-                        <span class="stat-value">
-                            {% with best=solution.work.solution_set.all|dictsortreversed:"score"|first %}
-                                {{ best.score }}/{{ solution.work.max_score }}
-                            {% endwith %}
-                        </span>
+                        <span class="stat-value">{{ user_best_score }}/{{ solution.work.max_score }}</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Средний балл:</span>
-                        <span class="stat-value">
-                            {% with solutions=solution.work.solution_set.all %}
-                                {% if solutions %}
-                                    {{ solutions|length }}
-                                {% else %}
-                                    0
-                                {% endif %}
-                            {% endwith %}
-                        </span>
+                        <span class="stat-value">{{ user_avg_score }}</span>
                     </div>
                 </div>
             </div>
@@ -300,6 +474,52 @@
                     </a>
                 </div>
             </div>
+
+            {% if is_teacher %}
+            <div class="sidebar-card" style="border:2px solid #667eea20">
+                <h3 style="color:#667eea"><i class="fas fa-chalkboard-teacher"></i> Оценка преподавателя</h3>
+                <form method="post" action="{% url 'manual_grade' solution.id %}" id="gradeForm">
+                  {% csrf_token %}
+                  <div style="margin-bottom:.85rem">
+                    <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:.35rem">
+                      Баллы (0–{{ solution.work.max_score }})
+                    </label>
+                    <input type="number" name="score" id="gradeScore" min="0" max="{{ solution.work.max_score }}"
+                           value="{{ solution.score_points }}"
+                           style="width:100%;padding:.5rem .75rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:1rem;box-sizing:border-box">
+                  </div>
+                  <div style="margin-bottom:.85rem">
+                    <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:.35rem">Статус</label>
+                    <select name="status" style="width:100%;padding:.5rem .75rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.9rem;box-sizing:border-box">
+                      <option value="correct" {% if solution.status == 'correct' %}selected{% endif %}>✅ Верно</option>
+                      <option value="partially_correct" {% if solution.status == 'partially_correct' %}selected{% endif %}>⚠️ Частично верно</option>
+                      <option value="incorrect" {% if solution.status == 'incorrect' %}selected{% endif %}>❌ Есть ошибки</option>
+                      <option value="submitted" {% if solution.status == 'submitted' %}selected{% endif %}>📤 На проверке</option>
+                    </select>
+                  </div>
+                  <div style="margin-bottom:1rem">
+                    <label style="font-size:.82rem;font-weight:600;color:#374151;display:block;margin-bottom:.35rem">Комментарий студенту</label>
+                    <textarea name="comment" rows="3" placeholder="Напишите замечания или рекомендации..."
+                              style="width:100%;padding:.5rem .75rem;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.88rem;resize:vertical;box-sizing:border-box"></textarea>
+                  </div>
+                  <button type="submit" class="btn btn-primary" style="width:100%">
+                    <i class="fas fa-save"></i> Сохранить оценку
+                  </button>
+                </form>
+                {% if solution.teacher_comments.exists %}
+                <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #f3f4f6">
+                  <p style="font-size:.78rem;font-weight:600;color:#6b7280;margin:0 0 .5rem">История оценок:</p>
+                  {% for tc in solution.teacher_comments.all %}
+                  <div style="font-size:.8rem;color:#374151;margin-bottom:.4rem">
+                    <span style="color:#9ca3af">{{ tc.created_at|date:"d.m H:i" }}</span>
+                    {% if tc.score is not None %}<strong> {{ tc.score }}б</strong>{% endif %}
+                    — {{ tc.text|truncatechars:80 }}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -322,11 +542,11 @@
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
+            if (data.status === 'success') {
                 // Запускаем проверку статуса
                 checkStatus(data.check_id);
             } else {
-                showError(data.error || 'Не удалось запустить проверку');
+                showError(data.message || data.error || 'Не удалось запустить проверку');
             }
         })
         .catch(error => {
@@ -343,13 +563,15 @@
         })
         .then(response => response.json())
         .then(data => {
-            if (data.status === 'completed') {
+            if (data.status === 'error') {
+                showError(data.message || 'Ошибка при проверке');
+            } else if (data.check_status === 'completed') {
                 showResults(data);
-            } else if (data.status === 'in_progress') {
-                // Продолжаем проверять статус
-                setTimeout(() => checkStatus(checkId), 2000);
+            } else if (data.check_status === 'failed') {
+                showError('Проверка завершилась с ошибкой: ' + (data.feedback || ''));
             } else {
-                showError('Ошибка при проверке: ' + (data.error || 'Неизвестная ошибка'));
+                // in_progress или pending — ждём
+                setTimeout(() => checkStatus(checkId), 2000);
             }
         })
         .catch(error => {
@@ -377,19 +599,26 @@
     function updateSection(sectionId, content) {
         const section = document.getElementById(sectionId);
         const contentDiv = section.querySelector('.section-content');
-        
-        if (content && content.trim() !== '') {
-            contentDiv.innerHTML = formatContent(content);
+
+        // content может быть строкой или массивом
+        const text = Array.isArray(content)
+            ? content.join('\n')
+            : (content != null ? String(content) : '');
+
+        if (text.trim() !== '') {
+            contentDiv.innerHTML = formatContent(text);
             section.style.display = 'block';
         } else {
             contentDiv.innerHTML = '<p>Нет данных</p>';
             section.style.display = 'none';
         }
     }
-    
+
     // Функция для форматирования содержимого
     function formatContent(content) {
-        return content.replace(/\n/g, '<br>');
+        return Array.isArray(content)
+            ? '<ul>' + content.map(i => '<li>' + i + '</li>').join('') + '</ul>'
+            : String(content).replace(/\n/g, '<br>');
     }
     
     // Функция для отображения ошибки
@@ -450,6 +679,46 @@
         link.click();
     }
 
+    // ── Консоль с stdin ────────────────────────────────────────────────────────
+    {% if solution_code and not is_doc_file %}
+    const CONSOLE_LANG = '{{ solution.work.language|default:"python" }}';
+    const SOLUTION_CODE = {{ solution_code_json|safe }};
+
+    async function runConsole() {
+        const btn = document.getElementById('consoleRunBtn');
+        const out = document.getElementById('consoleOutput');
+        const stdin = document.getElementById('consoleStdin').value;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Выполняется…';
+        out.className = 'console-output console-running';
+        out.textContent = 'Выполняется…';
+        try {
+            const fd = new FormData();
+            fd.append('csrfmiddlewaretoken', getCookie('csrftoken'));
+            fd.append('code', SOLUTION_CODE);
+            fd.append('language', CONSOLE_LANG);
+            fd.append('stdin', stdin);
+            const resp = await fetch('/api/run-code/', { method: 'POST', body: fd });
+            const data = await resp.json();
+            out.className = 'console-output ' + (data.status === 'error' ? 'console-error' : 'console-success');
+            out.textContent = data.output || '(нет вывода)';
+        } catch(e) {
+            out.className = 'console-output console-error';
+            out.textContent = 'Ошибка соединения: ' + e.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play"></i> Запустить';
+        }
+    }
+
+    function clearConsole() {
+        document.getElementById('consoleStdin').value = '';
+        const out = document.getElementById('consoleOutput');
+        out.className = 'console-output console-placeholder';
+        out.textContent = 'Нажмите «Запустить» чтобы увидеть результат';
+    }
+    {% endif %}
+
     // Плавная прокрутка к секциям
     document.addEventListener('DOMContentLoaded', function() {
         const hash = window.location.hash;
@@ -462,12 +731,34 @@
             }
         }
     });
+
+function recheckDoc(solutionId) {
+    const btn = document.getElementById('recheckDocBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Запускаю…'; }
+    const csrf = document.cookie.match(/csrftoken=([^;]+)/);
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrf ? csrf[1] : '');
+    fetch(`/api/recheck-doc/${solutionId}/`, {method: 'POST', body: fd})
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Запустить автопроверку'; }
+                return;
+            }
+            if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Запущено, загружаю…';
+            setTimeout(() => location.reload(), 1500);
+        })
+        .catch(() => {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Запустить автопроверку'; }
+        });
+}
 </script>
 {% endblock %}
 
 {% endblock %}
 
-{% block extra_css %}
+{% block extra_head %}
 <style>
 .solution-detail-container {
     max-width: 1200px;
@@ -522,7 +813,7 @@
     gap: 15px;
     padding: 20px;
     border-radius: var(--radius);
-    background: white;
+    background: var(--bg-card, white);
     box-shadow: var(--shadow);
     min-width: 250px;
 }
@@ -569,14 +860,14 @@
     gap: 20px;
 }
 
-.detail-card, .comment-card, .tests-card, .code-card {
-    background: white;
+.detail-card, .comment-card, .tests-card, .code-card, .autocheck-card, .console-card {
+    background: var(--bg-card, white);
     padding: 25px;
     border-radius: var(--radius);
     box-shadow: var(--shadow);
 }
 
-.detail-card h3, .comment-card h3, .tests-card h3, .code-card h3 {
+.detail-card h3, .comment-card h3, .tests-card h3, .code-card h3, .autocheck-card h3, .console-card h3 {
     margin-bottom: 20px;
     color: var(--dark);
     display: flex;
@@ -586,8 +877,11 @@
 
 .detail-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: 2fr 1fr 1fr;
     gap: 15px;
+}
+@media (max-width: 600px) {
+    .detail-grid { grid-template-columns: 1fr; }
 }
 
 .detail-item {
@@ -610,6 +904,23 @@
 .value.status-correct { color: var(--success); }
 .value.status-incorrect { color: var(--danger); }
 .value.status-partially_correct { color: var(--warning); }
+
+.status-badge {
+    display: inline-block;
+    width: fit-content;
+    align-self: flex-start;
+    padding: .25rem .65rem;
+    border-radius: 20px;
+    font-size: .8rem;
+    font-weight: 600;
+    margin-top: .2rem;
+}
+.status-badge-correct         { background: #d1fae5; color: #065f46; }
+.status-badge-incorrect       { background: #fee2e2; color: #991b1b; }
+.status-badge-partially_correct { background: #fef3c7; color: #92400e; }
+.status-badge-checking        { background: #dbeafe; color: #1e40af; }
+.status-badge-pending,
+.status-badge-submitted       { background: #e0e7ff; color: #3730a3; }
 
 .comment-content {
     line-height: 1.6;
@@ -737,7 +1048,7 @@ body.dark-mode .inline-comment{background:#78350f;color:#fde68a}
 }
 
 .sidebar-card {
-    background: white;
+    background: var(--bg-card, white);
     padding: 20px;
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -769,31 +1080,38 @@ body.dark-mode .inline-comment{background:#78350f;color:#fde68a}
 .difficulty-hard { color: var(--danger); }
 
 .stats-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
 }
 
 .stat-item {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--gray-light);
+    justify-content: center;
+    padding: 12px 8px;
+    border-radius: 10px;
+    background: var(--light, #f8fafc);
+    border: 1px solid var(--gray-light, #e5e7eb);
+    text-align: center;
+    gap: 4px;
 }
 
-.stat-item:last-child {
-    border-bottom: none;
+.stat-item:first-child {
+    grid-column: span 2;
 }
 
 .stat-label {
-    font-size: 0.9rem;
-    color: var(--gray);
+    font-size: 0.75rem;
+    color: var(--gray, #6b7280);
+    font-weight: 500;
 }
 
 .stat-value {
-    font-weight: 600;
-    color: var(--dark);
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--primary, #667eea);
 }
 
 .action-buttons {
@@ -811,6 +1129,35 @@ body.dark-mode .inline-comment{background:#78350f;color:#fde68a}
 .btn-outline:hover {
     background: var(--gray-light);
 }
+
+/* ── Dark mode overrides ────────────────────────────────── */
+body.dark-mode .detail-card,
+body.dark-mode .comment-card,
+body.dark-mode .tests-card,
+body.dark-mode .code-card,
+body.dark-mode .autocheck-card,
+body.dark-mode .sidebar-card,
+body.dark-mode .status-card { border: 1px solid #334155; }
+body.dark-mode .label { color: #94a3b8; }
+body.dark-mode .value { color: #e2e8f0; }
+body.dark-mode .stat-label { color: #94a3b8; }
+body.dark-mode .stat-value { color: #7dd3fc; }
+body.dark-mode .stat-item { background: #0f172a; border-color: #334155; }
+body.dark-mode .code-toolbar { background: #0f172a; border-color: #334155; }
+body.dark-mode .filename { color: #94a3b8; }
+body.dark-mode .tests-summary { background: #0f172a; }
+body.dark-mode .test-item { background: #0f172a; }
+body.dark-mode .work-info h4,
+body.dark-mode .sidebar-card h3,
+body.dark-mode .detail-card h3,
+body.dark-mode .comment-card h3,
+body.dark-mode .tests-card h3,
+body.dark-mode .code-card h3,
+body.dark-mode .autocheck-card h3 { color: #e2e8f0; }
+body.dark-mode .solution-title h1 { color: #f1f5f9; }
+body.dark-mode .solution-meta,
+body.dark-mode .work-difficulty,
+body.dark-mode .work-max-score { color: #94a3b8; }
 
 /* Адаптивность */
 @media (max-width: 968px) {
@@ -865,6 +1212,42 @@ body.dark-mode .inline-comment{background:#78350f;color:#fde68a}
         align-items: flex-start;
     }
 }
+
+/* Консоль */
+.console-card { border-left: 4px solid #10b981; }
+.console-card h3 { color: var(--dark); margin-bottom: 16px; }
+.console-body { display: flex; flex-direction: column; gap: 12px; }
+.console-label { font-size: .8rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 6px; }
+.console-stdin {
+    width: 100%; min-height: 80px; max-height: 200px;
+    font-family: 'Courier New', monospace; font-size: .875rem;
+    padding: .6rem .8rem; border: 1.5px solid #e5e7eb; border-radius: 8px;
+    resize: vertical; background: #f9fafb; color: #1f2937; box-sizing: border-box;
+}
+.console-stdin:focus { outline: none; border-color: #10b981; background: #fff; }
+.console-actions { display: flex; gap: .5rem; }
+.btn-console-run {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: #10b981; color: #fff; border: none; padding: .5rem 1.1rem;
+    border-radius: 8px; font-size: .875rem; font-weight: 600; cursor: pointer;
+}
+.btn-console-run:hover { background: #059669; }
+.btn-console-run:disabled { opacity: .6; cursor: not-allowed; }
+.btn-console-clear {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb;
+    padding: .5rem .9rem; border-radius: 8px; font-size: .875rem; cursor: pointer;
+}
+.btn-console-clear:hover { background: #e5e7eb; }
+.console-output {
+    font-family: 'Courier New', monospace; font-size: .875rem;
+    min-height: 80px; padding: .75rem 1rem;
+    border-radius: 8px; white-space: pre-wrap; word-break: break-all;
+}
+.console-placeholder { background: #f9fafb; color: #9ca3af; border: 1.5px dashed #e5e7eb; }
+.console-running { background: #fffbeb; color: #92400e; border: 1.5px solid #fde68a; }
+.console-success { background: #f0fdf4; color: #1f2937; border: 1.5px solid #86efac; }
+.console-error { background: #fef2f2; color: #991b1b; border: 1.5px solid #fca5a5; }
 </style>
 {% endblock %}
 

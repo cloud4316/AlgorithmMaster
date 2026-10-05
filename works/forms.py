@@ -7,7 +7,7 @@ import os
 import re
 import unicodedata
 
-ALLOWED_EXTENSIONS = {".py", ".cpp", ".c", ".java", ".kt", ".js", ".cs", ".ino", ".txt"}
+ALLOWED_EXTENSIONS = {".py", ".cpp", ".c", ".java", ".kt", ".js", ".cs", ".ino", ".txt", ".docx", ".doc", ".pdf"}
 MAX_FILE_SIZE_MB   = 2
 
 
@@ -31,8 +31,9 @@ class SolutionForm(forms.ModelForm):
         ext = os.path.splitext(f.name)[1].lower()
         if ext not in ALLOWED_EXTENSIONS:
             raise ValidationError(f"Недопустимое расширение. Разрешено: {', '.join(ALLOWED_EXTENSIONS)}")
-        if f.size > MAX_FILE_SIZE_MB * 1024 * 1024:
-            raise ValidationError(f"Размер файла превышает {MAX_FILE_SIZE_MB} МБ")
+        max_mb = 10 if ext in {'.docx', '.doc', '.pdf'} else MAX_FILE_SIZE_MB
+        if f.size > max_mb * 1024 * 1024:
+            raise ValidationError(f"Размер файла превышает {max_mb} МБ")
         return f
 
 

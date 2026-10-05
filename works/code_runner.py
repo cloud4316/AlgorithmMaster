@@ -32,9 +32,12 @@ def run_via_wandbox(lang, code, input_data=None):
         if m:
             cls = m.group(1)
             if cls != 'prog':
-                send_code = code.replace(f'public class {cls}', 'public class prog', 1)
-                # Replace ALL occurrences of the class name as a whole word
-                send_code = _re.sub(rf'\b{_re.escape(cls)}\b', 'prog', send_code)
+                # Заменяем только в объявлениях класса и конструкторах, но не в строках/комментариях
+                send_code = _re.sub(
+                    rf'(?<!["\'])(?:public\s+class|class|new)\s+{_re.escape(cls)}(?!["\'])',
+                    lambda mo: mo.group(0).replace(cls, 'prog'),
+                    code
+                )
 
     payload = {'compiler': compiler, 'code': send_code}
     if input_data:
@@ -67,31 +70,58 @@ def run_via_wandbox(lang, code, input_data=None):
 
 
 FORBIDDEN_IMPORTS = {"os", "sys", "subprocess", "socket", "shutil",
-                     "ctypes", "multiprocessing", "threading", "importlib"}
+                     "ctypes", "multiprocessing", "threading", "importlib",
+                     "pty", "fcntl", "signal", "resource", "mmap", "pickle",
+                     "shelve", "marshal", "builtins"}
 
-FORBIDDEN_NAMES = {'exec', 'eval', '__import__', 'compile', 'open', 'breakpoint'}
+FORBIDDEN_NAMES = {'exec', 'eval', '__import__', 'compile', 'open', 'breakpoint',
+                   'globals', 'locals', 'vars', 'dir', 'getattr', 'setattr',
+                   'delattr', 'hasattr', '__builtins__', '__loader__', '__spec__'}
+
+FORBIDDEN_STRINGS = {'__builtins__', '__class__', '__subclasses__', '__globals__',
+                     '__code__', '__closure__', 'func_globals', '__dict__',
+                     'mro()', '__base__', '__bases__'}
 
 def check_code_safety(code):
     """Возвращает (is_safe, reason)."""
     import ast as _ast
+    # Блокируем паттерны, обходящие AST-проверку через строки
+    for forbidden in FORBIDDEN_STRINGS:
+        if forbidden in code:
+            return False, f"Запрещённая конструкция: {forbidden}"
     try:
         tree = _ast.parse(code)
     except SyntaxError:
         return True, ""  # синтакс-ошибки поймает выполнение
     for node in _ast.walk(tree):
         if isinstance(node, (_ast.Import, _ast.ImportFrom)):
-            names = [a.name.split(".")[0] for a in node.names] if isinstance(node, _ast.Import) else [node.module.split(".")[0] if node.module else ""]
+            if isinstance(node, _ast.Import):
+                names = [a.name.split(".")[0] for a in node.names]
+            else:
+                names = [node.module.split(".")[0] if node.module else ""]
             for name in names:
                 if name in FORBIDDEN_IMPORTS:
                     return False, f"Запрещённый модуль: {name}"
-        # Ban dangerous builtins
+        # Запрещённые имена в вызовах функций
         if isinstance(node, _ast.Call):
             func = node.func
             fname = ''
-            if isinstance(func, _ast.Name): fname = func.id
-            elif isinstance(func, _ast.Attribute): fname = func.attr
+            if isinstance(func, _ast.Name):
+                fname = func.id
+            elif isinstance(func, _ast.Attribute):
+                fname = func.attr
             if fname in FORBIDDEN_NAMES:
                 return False, f"Запрещённая функция: {fname}"
+        # Запрещённые имена в обращениях к переменным
+        if isinstance(node, _ast.Name) and node.id in FORBIDDEN_NAMES:
+            return False, f"Запрещённое имя: {node.id}"
+        # Запрещённые имена атрибутов (getattr обход)
+        if isinstance(node, _ast.Attribute) and node.attr in FORBIDDEN_NAMES:
+            return False, f"Запрещённый атрибут: {node.attr}"
+        # Блокируем строки с именами опасных функций (передача через getattr/строку)
+        if isinstance(node, _ast.Constant) and isinstance(node.value, str):
+            if node.value in FORBIDDEN_NAMES:
+                return False, f"Запрещённая строка-имя: {node.value}"
     return True, ""
 
 def run_python_code(code, input_data=None):
@@ -320,6 +350,11 @@ def run_javascript_code(code, input_data=None):
         # Check as whole word to avoid false positives
         if _re.search(rf'\b{_re.escape(banned)}\b', code):
             return {'status': 'error', 'output': f'Запрещено: использование {banned} не разрешено.', 'error': banned}
+
+    # Проверяем наличие node; если нет — понятная ошибка вместо WinError 2
+    import shutil as _shutil
+    if not _shutil.which('node'):
+        return {'status': 'error', 'output': 'Node.js не установлен на сервере. Обратись к преподавателю.', 'error': 'node not found'}
 
     with tempfile.NamedTemporaryFile(suffix='.js', delete=False, mode='w', encoding='utf-8') as f:
         f.write(code)

@@ -90,6 +90,18 @@
   </div>
   {% endif %}
 
+  <!-- Быстрый доступ к МДК 03.02 (открытый курс) -->
+  {% if current_subject.slug != 'asutps' %}
+  <a href="{% url 'switch_subject' 'asutps' %}?next=/theory/" class="card card-hover animate-in mb-3" style="text-decoration:none;display:flex;align-items:center;gap:1rem;padding:1rem 1.4rem;border-left:4px solid #8b5cf6">
+    <span style="font-size:2rem">📚</span>
+    <div>
+      <div class="font-semibold">МДК 03.02 — Технологии АСУТП</div>
+      <div class="text-muted text-sm">Открытый курс · 6 модулей · 15 уроков</div>
+    </div>
+    <span style="margin-left:auto;color:var(--text-muted);font-size:.85rem">Открыть →</span>
+  </a>
+  {% endif %}
+
   <!-- Быстрые действия -->
   <div class="grid-3 mb-4">
     <a href="{% url 'theory_list' %}" class="card card-hover animate-in" style="text-decoration:none;animation-delay:.05s">
@@ -133,6 +145,19 @@
     </a>
   </div>
 
+  <!-- PyGrid бета -->
+  <a href="{% url 'pygrid_beta' %}" class="card card-hover animate-in mb-4" style="text-decoration:none;border-left:4px solid #8b5cf6;display:flex;align-items:center;gap:1.2rem;padding:1rem 1.4rem">
+    <div style="font-size:2.2rem;flex-shrink:0">🤖</div>
+    <div style="flex:1">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.2rem">
+        <h3 style="margin:0;font-size:1rem">PyGrid</h3>
+        <span style="background:#8b5cf6;color:#fff;font-size:.65rem;font-weight:700;padding:.15rem .45rem;border-radius:4px;letter-spacing:.05em">БЕТА</span>
+      </div>
+      <p class="text-muted text-sm" style="margin:0">Управляй роботом на Python — 17 уровней</p>
+    </div>
+    <div style="color:#8b5cf6;font-size:1.2rem">→</div>
+  </a>
+
   <!-- Последние практические работы -->
   {% if highlight_works %}
   <div class="card animate-in">
@@ -172,6 +197,14 @@
       </a>
       <a href="{% url 'custom_login' %}" style="background:rgba(255,255,255,.15);color:#fff;border:2px solid rgba(255,255,255,.5);padding:.85rem 2.5rem;border-radius:var(--radius-full);font-weight:700;text-decoration:none;font-size:1rem;backdrop-filter:blur(4px)">
         Войти
+      </a>
+    </div>
+    <div style="margin-top:2rem;display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap">
+      <a href="{% url 'switch_subject' 'asutps' %}?next=/theory/" style="display:inline-flex;align-items:center;gap:.6rem;background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.4);padding:.7rem 1.8rem;border-radius:var(--radius-full);font-weight:600;text-decoration:none;font-size:.95rem;backdrop-filter:blur(4px)">
+        <span style="font-size:1.2rem">📚</span> Теория МДК 03.02
+      </a>
+      <a href="{% url 'pid_simulator' %}" style="display:inline-flex;align-items:center;gap:.6rem;background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.4);padding:.7rem 1.8rem;border-radius:var(--radius-full);font-weight:600;text-decoration:none;font-size:.95rem;backdrop-filter:blur(4px)">
+        <span style="font-size:1.2rem">🎛️</span> ПИД-симулятор
       </a>
     </div>
   </div>
@@ -220,8 +253,8 @@
 .ann-close{position:absolute;top:.6rem;right:.6rem;background:none;border:none;color:#9ca3af;cursor:pointer;font-size:.85rem;padding:.2rem .4rem;border-radius:4px}
 .ann-close:hover{background:#f3f4f6;color:#374151}
 .ann-create-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .9rem;border-radius:8px;background:#667eea;color:#fff;text-decoration:none;font-size:.83rem;font-weight:500}
-body.dark-mode .ann-card{background:#1e293b;border-color:#334155;border-left-color:#667eea}
-body.dark-mode .ann-text{color:#94a3b8}
+body.dark-mode .ann-card{background:#1c1c1e;border-color:rgba(255,255,255,.1);border-left-color:#667eea}
+body.dark-mode .ann-text{color:#98989d}
 </style>
 <script>
 function dismissAnn(id) {

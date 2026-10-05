@@ -1,0 +1,244 @@
+{% extends 'works/base.html' %}
+{% load static %}
+
+{% block title %}Профиль: {{ student.last_name }} {{ student.first_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+.sp-wrap{max-width:1000px;margin:2rem auto;padding:0 1rem}
+.sp-back{display:inline-flex;align-items:center;gap:.5rem;color:#667eea;font-size:.9rem;font-weight:600;text-decoration:none;margin-bottom:1.25rem}
+.sp-back:hover{text-decoration:underline}
+.sp-header{background:linear-gradient(135deg,#667eea,#764ba2);border-radius:16px;padding:1.75rem 2rem;color:#fff;display:flex;align-items:center;gap:1.5rem;margin-bottom:1.75rem}
+.sp-avatar{width:72px;height:72px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;flex-shrink:0}
+.sp-name{font-size:1.5rem;font-weight:700;margin:0 0 .25rem}
+.sp-meta{font-size:.875rem;opacity:.85}
+.sp-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.75rem}
+@media(max-width:640px){.sp-stats{grid-template-columns:repeat(2,1fr)}}
+.sp-stat{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1.1rem;text-align:center}
+.sp-stat-val{font-size:1.75rem;font-weight:700;color:#667eea}
+.sp-stat-label{font-size:.78rem;color:#6b7280;margin-top:.2rem}
+.sp-section{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:1.5rem;overflow:hidden}
+.sp-section-head{padding:.9rem 1.25rem;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.sp-table{width:100%;border-collapse:collapse;font-size:.875rem}
+.sp-table th{background:#f9fafb;padding:.6rem 1rem;text-align:left;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb}
+.sp-table td{padding:.65rem 1rem;border-bottom:1px solid #f3f4f6;color:#1f2937}
+.sp-table tr:last-child td{border-bottom:none}
+.sp-table tr:hover td{background:#fafafa}
+.badge{display:inline-flex;align-items:center;padding:.2rem .55rem;border-radius:20px;font-size:.75rem;font-weight:600}
+.badge-green{background:#d1fae5;color:#065f46}
+.badge-yellow{background:#fef3c7;color:#92400e}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-gray{background:#f3f4f6;color:#374151}
+.badge-blue{background:#dbeafe;color:#1e40af}
+.sp-empty{padding:2rem;text-align:center;color:#9ca3af;font-size:.9rem}
+.sp-link{color:#667eea;text-decoration:none;font-weight:500}
+.sp-link:hover{text-decoration:underline}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sp-wrap">
+  <a href="{% url 'admin_panel' %}" class="sp-back"><i class="fas fa-arrow-left"></i> Назад к панели</a>
+
+  <div class="sp-header">
+    <div class="sp-avatar">{{ student.first_name|first|upper }}{{ student.last_name|first|upper }}</div>
+    <div>
+      <div class="sp-name">{{ student.last_name }} {{ student.first_name }}</div>
+      <div class="sp-meta">
+        @{{ student.username }}
+        &nbsp;·&nbsp;
+        Зарегистрирован: {{ student.date_joined|date:"d.m.Y" }}
+        {% if progress %}
+        &nbsp;·&nbsp;
+        Уровень {{ progress.level }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="sp-stats">
+    <div class="sp-stat">
+      <div class="sp-stat-val">{{ total_solutions }}</div>
+      <div class="sp-stat-label">Попыток решений</div>
+    </div>
+    <div class="sp-stat">
+      <div class="sp-stat-val">{{ correct_solutions }}</div>
+      <div class="sp-stat-label">Решено задач</div>
+    </div>
+    <div class="sp-stat">
+      <div class="sp-stat-val">{{ success_rate }}%</div>
+      <div class="sp-stat-label">Успешность</div>
+    </div>
+    <div class="sp-stat">
+      <div class="sp-stat-val">{{ quizzes_passed }}</div>
+      <div class="sp-stat-label">Тестов сдано</div>
+    </div>
+  </div>
+
+  <!-- Решения практических работ -->
+  <div class="sp-section">
+    <div class="sp-section-head"><i class="fas fa-code"></i> Практические работы ({{ total_solutions }} попыток)</div>
+    {% if solutions %}
+    <table class="sp-table">
+      <thead>
+        <tr>
+          <th>Работа</th>
+          <th>Статус</th>
+          <th>Балл</th>
+          <th>Попытка</th>
+          <th>Дата</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sol in solutions %}
+        <tr>
+          <td style="max-width:260px;word-break:break-word">{{ sol.work.title }}</td>
+          <td>
+            {% if sol.status == 'correct' %}
+              <span class="badge badge-green">Верно</span>
+            {% elif sol.status == 'partially_correct' %}
+              <span class="badge badge-yellow">Частично</span>
+            {% elif sol.status == 'wrong' %}
+              <span class="badge badge-red">Неверно</span>
+            {% elif sol.status == 'submitted' %}
+              <span class="badge badge-blue">На проверке</span>
+            {% else %}
+              <span class="badge badge-gray">{{ sol.status }}</span>
+            {% endif %}
+          </td>
+          <td>{% if sol.score is not None %}{{ sol.score }}{% else %}—{% endif %}</td>
+          <td>#{{ sol.attempt_number }}</td>
+          <td>{{ sol.submitted_at|date:"d.m.Y H:i" }}</td>
+          <td><a href="{% url 'solution_detail' sol.id %}" class="sp-link">Подробнее</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="sp-empty">Нет решений</div>
+    {% endif %}
+  </div>
+
+  <!-- Тесты -->
+  <div class="sp-section">
+    <div class="sp-section-head"><i class="fas fa-clipboard-check"></i> Тесты — лучший результат по каждому</div>
+    {% if best_per_quiz %}
+    <table class="sp-table">
+      <thead>
+        <tr>
+          <th>Тест</th>
+          <th>Лучший балл</th>
+          <th>Попыток</th>
+          <th>Ср. время</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in best_per_quiz %}
+        <tr>
+          <td>{{ item.quiz__title }}</td>
+          <td>
+            {% if item.best_score >= 70 %}
+              <span class="badge badge-green">{{ item.best_score }}%</span>
+            {% elif item.best_score >= 50 %}
+              <span class="badge badge-yellow">{{ item.best_score }}%</span>
+            {% else %}
+              <span class="badge badge-red">{{ item.best_score }}%</span>
+            {% endif %}
+          </td>
+          <td>{{ item.attempts }}</td>
+          <td>{{ item.avg_time_fmt|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="sp-empty">Тесты не проходились</div>
+    {% endif %}
+  </div>
+
+  <!-- Курсовые работы студента -->
+  <div class="sp-section">
+    <div class="sp-section-head">
+      <i class="fas fa-graduation-cap"></i> Курсовые работы
+      <a href="{% url 'coursework_assign' %}?student={{ student.id }}" style="margin-left:auto;font-size:.82rem;color:#667eea;text-decoration:none;font-weight:600"><i class="fas fa-plus"></i> Назначить</a>
+    </div>
+    {% if course_works %}
+    <table class="sp-table">
+      <thead>
+        <tr>
+          <th>Тема</th>
+          <th>Предмет</th>
+          <th>Статус</th>
+          <th>Срок</th>
+          <th>Оценка</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cw in course_works %}
+        <tr>
+          <td style="max-width:240px">
+            <div style="font-weight:600">{{ cw.title }}</div>
+            {% if cw.teacher_note %}<div style="font-size:.78rem;color:#9ca3af;margin-top:.2rem">{{ cw.teacher_note|truncatechars:60 }}</div>{% endif %}
+            <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.2rem">
+              {% if cw.subject.method_guide %}<a href="/media/{{ cw.subject.method_guide }}" target="_blank" style="font-size:.75rem;color:#667eea;text-decoration:none"><i class="fas fa-file-pdf" style="color:#ef4444"></i> Методичка</a>{% endif %}
+              {% if cw.subject.example_cw_file %}<a href="/media/{{ cw.subject.example_cw_file }}" target="_blank" style="font-size:.75rem;color:#667eea;text-decoration:none"><i class="fas fa-file-word" style="color:#2563eb"></i> Пример КП</a>{% endif %}
+            </div>
+          </td>
+          <td>{{ cw.subject.title|default:"—" }}</td>
+          <td>
+            <span style="background:{{ cw.status_color }}22;color:{{ cw.status_color }};padding:.2rem .55rem;border-radius:20px;font-size:.75rem;font-weight:600">
+              {{ cw.get_status_display }}
+            </span>
+          </td>
+          <td>{{ cw.deadline|date:"d.m.Y"|default:"—" }}</td>
+          <td style="font-weight:700">{% if cw.grade %}{{ cw.grade }}{% else %}—{% endif %}</td>
+          <td>
+            <a href="{% url 'coursework_edit' cw.id %}" class="sp-link">Изменить</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="sp-empty">Курсовые не назначены</div>
+    {% endif %}
+  </div>
+
+  <!-- Все попытки тестов -->
+  {% if quiz_attempts %}
+  <div class="sp-section">
+    <div class="sp-section-head"><i class="fas fa-history"></i> История всех попыток тестов</div>
+    <table class="sp-table">
+      <thead>
+        <tr>
+          <th>Тест</th>
+          <th>Балл</th>
+          <th>Результат</th>
+          <th>Время</th>
+          <th>Дата</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for attempt in quiz_attempts %}
+        <tr>
+          <td>{{ attempt.quiz.title }}</td>
+          <td>{{ attempt.score }}%</td>
+          <td>
+            {% if attempt.passed %}
+              <span class="badge badge-green">Сдан</span>
+            {% else %}
+              <span class="badge badge-red">Не сдан</span>
+            {% endif %}
+          </td>
+          <td>{{ attempt.time_spent_fmt|default:"—" }}</td>
+          <td>{{ attempt.created_at|date:"d.m.Y H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

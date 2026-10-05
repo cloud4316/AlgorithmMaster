@@ -1,0 +1,78 @@
+{
+  "type": "FeatureCollection",
+  "description": "Демо-сценарий: две зоны съёмки по обе стороны от бесполётной зоны, 2 БПЛА с разных ВПП.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "type": "area", "name": "Зона 1 — западный участок" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [38.0100, 55.8650],
+          [38.0380, 55.8650],
+          [38.0380, 55.8950],
+          [38.0100, 55.8950],
+          [38.0100, 55.8650]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "type": "area", "name": "Зона 2 — восточный участок" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [38.0620, 55.8650],
+          [38.0900, 55.8650],
+          [38.0900, 55.8950],
+          [38.0620, 55.8950],
+          [38.0620, 55.8650]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "type": "no_fly_zone", "name": "БЗ — промышленная зона" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [38.0380, 55.8600],
+          [38.0620, 55.8600],
+          [38.0620, 55.8970],
+          [38.0380, 55.8970],
+          [38.0380, 55.8600]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "type": "airspace", "name": "Граница воздушного пространства" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [37.9900, 55.8500],
+          [38.1100, 55.8500],
+          [38.1100, 55.9100],
+          [37.9900, 55.9100],
+          [37.9900, 55.8500]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "type": "landing_site", "id": "site_1", "name": "ВПП — западный старт" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [38.0100, 55.8650]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "type": "landing_site", "id": "site_2", "name": "ВПП — восточный старт" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [38.0900, 55.8650]
+      }
+    }
+  ]
+}

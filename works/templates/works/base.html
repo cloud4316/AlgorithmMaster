@@ -7,7 +7,7 @@
     <title>{% block title %}AlgorithmMaster - Платформа для изучения алгоритмов{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'works/css/design-system.css' %}">
     <link rel="stylesheet" href="{% static 'works/css/main.css' %}">
-    <link rel="stylesheet" href="{% static 'works/css/mobile.css' %}">
+    <link rel="stylesheet" href="{% static 'works/css/mobile.css' %}?v=2">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" type="image/png" href="{% static 'works/favicon.png' %}">
@@ -32,7 +32,7 @@
     }
     body.dark-mode { background: var(--bg); color: var(--text); }
     body.dark-mode .nav-bar,
-    body.dark-mode .nav-dropdown-menu { background: #1e293b; border-color: #334155; }
+    body.dark-mode .nav-dropdown-menu { background: #1c1c1e; border-color: rgba(255,255,255,.1); }
     body.dark-mode .module-card,
     body.dark-mode .quiz-card,
     body.dark-mode .review-card,
@@ -42,21 +42,21 @@
     body.dark-mode .ts-table-wrap,
     body.dark-mode .gb-table-wrap,
     body.dark-mode .lb-table-wrap,
-    body.dark-mode .ap-table-wrap { background: #1e293b; border-color: #334155; }
+    body.dark-mode .ap-table-wrap { background: #1c1c1e; border-color: rgba(255,255,255,.1); }
     body.dark-mode .form-input,
     body.dark-mode .ts-filters select,
-    body.dark-mode .ap-search { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+    body.dark-mode .ap-search { background: #1c1c1e; color: #f5f5f7; border-color: rgba(255,255,255,.12); }
     body.dark-mode .lb-table th,
     body.dark-mode .gb-table th,
     body.dark-mode .ts-table th,
-    body.dark-mode .ap-table th { background: #1e293b; color: #94a3b8; border-color: #334155; }
+    body.dark-mode .ap-table th { background: #000000; color: #98989d; border-color: rgba(255,255,255,.08); }
     body.dark-mode .lb-table td,
     body.dark-mode .gb-table td,
     body.dark-mode .ts-table td,
-    body.dark-mode .ap-table td { border-color: #1e293b; }
+    body.dark-mode .ap-table td { border-color: rgba(255,255,255,.06); }
     body.dark-mode .lb-table tr:hover td,
-    body.dark-mode .gb-table tr:hover td { background: #263148; }
-    body.dark-mode h1,h2,h3 { color: #e2e8f0; }
+    body.dark-mode .gb-table tr:hover td { background: #2c2c2e; }
+    body.dark-mode h1, body.dark-mode h2, body.dark-mode h3 { color: #f5f5f7; }
     /* Bell */
     .nav-bell { position: relative; }
     .bell-count {
@@ -76,7 +76,12 @@
     }
     /* ── Nav layout overrides ──────────────────────────────────────────── */
     .header { border-bottom: 1px solid #e5e7eb; }
-    body.dark-mode .header { border-bottom-color: #334155; }
+    body.dark-mode .header {
+      background: rgba(28,28,30,.85) !important;
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      backdrop-filter: saturate(180%) blur(20px);
+      border-bottom-color: rgba(255,255,255,.08);
+    }
 
     .nav-container {
       max-width: none !important;       /* span full width */
@@ -99,7 +104,7 @@
       width: 1px; height: 24px; background: #e5e7eb;
       margin: 0 1rem; flex-shrink: 0;
     }
-    body.dark-mode .nav-divider { background: #334155; }
+    body.dark-mode .nav-divider { background: rgba(255,255,255,.12); }
 
     /* Center nav group */
     .nav-center {
@@ -172,13 +177,17 @@
     }
     .subj-picker-menu a i { width: 16px; text-align: center; }
     body.dark-mode .subj-picker-btn {
-      background: color-mix(in srgb, var(--sp-color,#667eea) 18%, #1e293b);
+      background: color-mix(in srgb, var(--sp-color,#667eea) 18%, #1c1c1e);
     }
     body.dark-mode .subj-picker-menu {
-      background: #1e293b; border-color: #334155;
+      background: #1c1c1e; border-color: rgba(255,255,255,.1);
     }
-    body.dark-mode .subj-picker-menu a { color: #e2e8f0; }
-    body.dark-mode .subj-picker-menu a:hover { background: #263148; }
+    body.dark-mode .subj-picker-menu a { color: #f5f5f7; }
+    body.dark-mode .subj-picker-menu a:hover { background: #2c2c2e; }
+    body.dark-mode .subj-picker-menu a.active {
+      background: color-mix(in srgb, var(--sp-color,#667eea) 18%, #1c1c1e);
+      color: var(--sp-color,#667eea);
+    }
 
     /* Mobile subject pills fallback */
     .subj-mobile-row {
@@ -339,6 +348,9 @@
                         <i class="fas fa-folder-open"></i><span class="nav-link-label">Проекты</span>
                     </a>
                     {% endif %}
+                    <a href="{% url 'algo_visualizer' %}" class="nav-link {% if 'visualizer' in request.path %}active{% endif %}" title="Визуализатор">
+                        <i class="fas fa-play-circle"></i><span class="nav-link-label">Визуализатор</span>
+                    </a>
                     <a href="{% url 'theory_search' %}" class="nav-link" title="Поиск">
                         <i class="fas fa-search"></i>
                     </a>
@@ -365,6 +377,7 @@
                             <a href="{% url 'teacher_analytics' %}"><i class="fas fa-chart-bar"></i> Аналитика</a>
                             <a href="{% url 'circuit_solutions_list' %}"><i class="fas fa-project-diagram"></i> Схемы</a>
                             <a href="{% url 'teacher_projects' %}"><i class="fas fa-folder-open"></i> Проекты студентов</a>
+                            <a href="{% url 'coursework_list' %}"><i class="fas fa-graduation-cap"></i> Курсовые</a>
                             <a href="{% url 'announcement_list' %}"><i class="fas fa-bullhorn"></i> Объявления</a>
                             <a href="{% url 'export_gradebook_excel' %}"><i class="fas fa-file-excel" style="color:#1d6f42"></i> Excel</a>
                             <a href="{% url 'export_gradebook_csv' %}"><i class="fas fa-file-csv" style="color:#0891b2"></i> CSV</a>
@@ -595,6 +608,158 @@ if ('serviceWorker' in navigator) {
       .catch(() => {});
   });
 }
+</script>
+<script>
+(function(){
+  // Правая кнопка мыши
+  document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+  // Горячие клавиши
+  document.addEventListener('keydown', function(e){
+    var k = e.key || '';
+    if(k === 'F12'){ e.preventDefault(); return false; }
+    if(e.ctrlKey){
+      var lk = k.toLowerCase();
+      // Ctrl+U исходник, Ctrl+S сохранить, Ctrl+C копировать, Ctrl+A выделить всё, Ctrl+P печать
+      if(['u','s','c','a','p'].indexOf(lk) !== -1){
+        // Разрешить Ctrl+C/A только внутри textarea и input (редактор кода)
+        var tag = (e.target && e.target.tagName) || '';
+        if((lk === 'c' || lk === 'a') && (tag === 'TEXTAREA' || tag === 'INPUT')){
+          return; // не блокировать — студент вводит свой код
+        }
+        e.preventDefault(); return false;
+      }
+      // Ctrl+Shift+I/J/C/K DevTools
+      if(e.shiftKey && ['i','j','c','k'].indexOf(lk) !== -1){
+        e.preventDefault(); return false;
+      }
+    }
+  });
+
+  // Запрет выделения текста на всей странице кроме полей ввода
+  document.addEventListener('selectstart', function(e){
+    var tag = (e.target && e.target.tagName) || '';
+    if(tag !== 'TEXTAREA' && tag !== 'INPUT'){
+      e.preventDefault(); return false;
+    }
+  });
+})();
+</script>
+
+{% if user.is_authenticated %}
+<!-- ── Bottom navigation (mobile only) ──────────────────────────── -->
+<nav class="bottom-nav" id="bottomNav" aria-label="Мобильная навигация">
+  <a href="{% url 'home' %}" class="bn-item {% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+    <i class="fas fa-home"></i><span>Главная</span>
+  </a>
+  <a href="{% url 'theory_list' %}" class="bn-item {% if 'theory' in request.path %}active{% endif %}">
+    <i class="fas fa-book-open"></i><span>Теория</span>
+  </a>
+  <a href="{% url 'work_list' %}" class="bn-item {% if 'works' in request.path %}active{% endif %}">
+    <i class="fas fa-code"></i><span>Практика</span>
+  </a>
+  <a href="{% url 'quiz_list' %}" class="bn-item {% if 'quiz' in request.path %}active{% endif %}">
+    <i class="fas fa-tasks"></i><span>Тесты</span>
+  </a>
+  <a href="{% url 'profile' %}" class="bn-item {% if 'profile' in request.path %}active{% endif %}">
+    <i class="fas fa-user"></i><span>Профиль</span>
+  </a>
+</nav>
+{% endif %}
+
+<style>
+/* ── Bottom nav ─────────────────────────────────────────────────── */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  z-index: 900;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: 0 -2px 12px rgba(0,0,0,.06);
+}
+body.dark-mode .bottom-nav {
+  background: #1c1c1e;
+  border-top-color: rgba(255,255,255,.1);
+  box-shadow: 0 -2px 12px rgba(0,0,0,.3);
+}
+.bn-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 4px;
+  color: #9ca3af;
+  text-decoration: none;
+  font-size: .62rem;
+  font-weight: 500;
+  min-height: 52px;
+  transition: color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.bn-item i { font-size: 1.25rem; line-height: 1; }
+.bn-item.active { color: #667eea; }
+.bn-item.active i { transform: scale(1.1); }
+body.dark-mode .bn-item { color: #636366; }
+body.dark-mode .bn-item.active { color: #818cf8; }
+
+@media (max-width: 900px) {
+  .bottom-nav { display: flex; }
+  /* контент не уходит под bottom-nav */
+  .main {
+    padding-bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 1rem) !important;
+  }
+  /* sticky submit quiz поднимается выше bottom-nav */
+  .quiz-submit-row {
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + .5rem) !important;
+  }
+  /* footer не нужен на мобиле с bottom-nav */
+  .footer { display: none; }
+}
+
+/* ── Landscape fix ──────────────────────────────────────────────── */
+@media (max-height: 500px) and (orientation: landscape) {
+  .nav-container { height: 48px !important; }
+  .subj-mobile-row { display: none !important; }
+  .main { margin-top: 48px !important; }
+  .lesson-sidebar {
+    top: 48px !important;
+    height: calc(100vh - 48px) !important;
+  }
+  .exam-timer { top: 52px !important; }
+  /* bottom-nav в ландшафте скрываем — мало места по высоте */
+  .bottom-nav { display: none !important; }
+  .main {
+    padding-bottom: 1rem !important;
+  }
+  .footer { display: block; }
+}
+</style>
+<script>
+// ── Hide nav on scroll down, show on scroll up (мобильные) ──────
+(function(){
+  if (window.innerWidth > 900) return;
+  var header = document.querySelector('header.header');
+  if (!header) return;
+  var lastY = window.scrollY, ticking = false;
+  window.addEventListener('scroll', function(){
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function(){
+      var y = window.scrollY;
+      if (y > lastY && y > 100) {
+        header.classList.add('nav-hidden');
+      } else if (y < lastY) {
+        header.classList.remove('nav-hidden');
+      }
+      lastY = y;
+      ticking = false;
+    });
+  }, {passive: true});
+})();
 </script>
 </body>
 </html>

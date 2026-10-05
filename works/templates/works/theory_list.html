@@ -3,6 +3,17 @@
 {% block content %}
 <div class="page-container">
 
+  {% if current_subject.slug == 'asutps' %}
+  <a href="{% url 'pid_simulator' %}" style="display:flex;align-items:center;gap:1rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;padding:1rem 1.5rem;border-radius:12px;text-decoration:none;margin-bottom:1rem">
+    <span style="font-size:2rem">🎛️</span>
+    <div>
+      <div style="font-weight:700;font-size:1rem">ПИД-симулятор</div>
+      <div style="font-size:.85rem;opacity:.85">Практическая работа: настройка регулятора онлайн</div>
+    </div>
+    <span style="margin-left:auto;font-size:.9rem;opacity:.7">Открыть →</span>
+  </a>
+  {% endif %}
+
   {% if current_subject %}
   <div class="subject-hero" style="--subj-color:{{ current_subject.color }}">
     <div class="subject-hero-icon">
@@ -29,6 +40,14 @@
     <p class="page-subtitle">Изучи основы программирования</p>
   </div>
   {% endif %}
+
+  <div id="bookmarks-section" style="display:none;margin-bottom:1.5rem">
+    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem">
+      <span style="font-size:1rem">★</span>
+      <h3 style="font-size:.95rem;font-weight:600;margin:0;color:#f59e0b">Закладки</h3>
+    </div>
+    <div id="bookmarks-list" style="display:flex;flex-wrap:wrap;gap:.5rem"></div>
+  </div>
 
   <div class="modules-grid">
     {% for module in modules %}
@@ -89,6 +108,14 @@ body.dark-mode .subject-hero{background:#1e293b;border-color:#334155;border-left
 body.dark-mode .subject-hero-desc{color:#94a3b8}
 body.dark-mode .subject-progress-bar{background:#334155}
 body.dark-mode .subject-progress-label{color:#94a3b8}
+body.dark-mode .module-card{background:#1e293b;border-color:#334155}
+body.dark-mode .module-title{color:#e2e8f0}
+body.dark-mode .module-desc{color:#94a3b8}
+body.dark-mode .module-meta{color:#64748b}
+body.dark-mode .progress-bar-wrap{background:#334155}
+body.dark-mode .module-progress-text{color:#64748b}
+body.dark-mode .module-footer{border-top-color:#334155}
+body.dark-mode .btn-outline{color:#a5b4fc;border-color:#a5b4fc}
 .modules-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem}
 .module-card{background:#fff;border-radius:12px;border:1px solid #e5e7eb;overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .2s}
 .module-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.1)}
@@ -112,4 +139,28 @@ body.dark-mode .subject-progress-label{color:#94a3b8}
 .empty-state{text-align:center;padding:3rem;color:#9ca3af;grid-column:1/-1}
 .empty-state i{font-size:3rem;margin-bottom:1rem}
 </style>
+<script>
+(function(){
+  const KEY = 'theory_bookmarks';
+  try {
+    const bm = JSON.parse(localStorage.getItem(KEY)||'{}');
+    const ids = Object.keys(bm);
+    if(!ids.length) return;
+    const section = document.getElementById('bookmarks-section');
+    const list = document.getElementById('bookmarks-list');
+    section.style.display = 'block';
+    ids.forEach(function(id){
+      const item = bm[id];
+      const a = document.createElement('a');
+      a.href = item.url;
+      a.title = item.module;
+      a.style.cssText = 'display:inline-flex;align-items:center;gap:.4rem;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:20px;padding:.28rem .75rem;font-size:.8rem;text-decoration:none;transition:.15s';
+      a.onmouseenter = function(){ this.style.background='#fde68a'; };
+      a.onmouseleave = function(){ this.style.background='#fef3c7'; };
+      a.innerHTML = '<span style="color:#f59e0b">★</span> ' + item.title;
+      list.appendChild(a);
+    });
+  } catch(e){}
+})();
+</script>
 {% endblock %}

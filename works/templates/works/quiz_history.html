@@ -1,0 +1,97 @@
+{% extends 'works/base.html' %}
+{% block title %}История: {{ quiz.title }}{% endblock %}
+{% block content %}
+<div class="qh-wrap">
+  <a href="{% url 'quiz_detail' quiz.id %}" class="back-link"><i class="fas fa-arrow-left"></i> К тесту</a>
+  <h1>{{ quiz.title }}</h1>
+  <p class="qh-sub">История твоих попыток и разбор ошибок</p>
+
+  {% if not attempts_detail %}
+  <div class="qh-empty"><i class="fas fa-inbox"></i> Ты ещё не проходил этот тест.</div>
+  {% endif %}
+
+  {% for item in attempts_detail %}
+  <div class="attempt-block {% if item.attempt.passed %}passed{% else %}failed{% endif %}">
+    <div class="attempt-header">
+      <span class="attempt-num">Попытка {{ forloop.revcounter }}</span>
+      <span class="attempt-score {% if item.attempt.passed %}pass{% else %}fail{% endif %}">
+        {{ item.attempt.score }}%
+        {% if item.attempt.passed %}<i class="fas fa-check-circle"></i> Зачёт{% else %}<i class="fas fa-times-circle"></i> Не сдал{% endif %}
+      </span>
+      <span class="attempt-date">{{ item.attempt.created_at|date:"d.m.Y H:i" }}</span>
+    </div>
+
+    <div class="breakdown-list">
+      {% for row in item.breakdown %}
+      <div class="brow {% if row.is_correct %}ok{% else %}err{% endif %}">
+        <div class="brow-indicator">{% if row.is_correct %}<i class="fas fa-check"></i>{% else %}<i class="fas fa-times"></i>{% endif %}</div>
+        <div class="brow-body">
+          <p class="brow-q">{{ row.question }}</p>
+          {% if row.code %}<pre class="brow-code">{{ row.code }}</pre>{% endif %}
+          {% if not row.is_correct %}
+          <div class="brow-answers">
+            <div class="chosen-ans"><span class="ans-label">Твой ответ:</span>
+              {% for t in row.chosen %}<span class="ans-chip wrong">{{ t }}</span>{% empty %}<span class="ans-chip empty">—</span>{% endfor %}
+            </div>
+            <div class="correct-ans"><span class="ans-label">Правильно:</span>
+              {% for t in row.correct %}<span class="ans-chip right">{{ t }}</span>{% endfor %}
+            </div>
+            {% if row.explanation %}<p class="explanation"><i class="fas fa-lightbulb"></i> {{ row.explanation }}</p>{% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+.qh-wrap{max-width:800px;margin:0 auto;padding:2rem 1rem}
+.back-link{display:inline-flex;align-items:center;gap:.5rem;color:#667eea;text-decoration:none;font-size:.85rem;margin-bottom:1rem}
+.qh-wrap h1{font-size:1.5rem;margin-bottom:.3rem}
+.qh-sub{color:#6b7280;font-size:.88rem;margin-bottom:2rem}
+.qh-empty{text-align:center;padding:3rem;color:#9ca3af;font-size:1rem}
+.attempt-block{border:1.5px solid #e5e7eb;border-radius:14px;margin-bottom:1.5rem;overflow:hidden}
+.attempt-block.passed{border-color:#6ee7b7}
+.attempt-block.failed{border-color:#fca5a5}
+.attempt-header{display:flex;align-items:center;gap:1rem;padding:1rem 1.25rem;background:#f9fafb;flex-wrap:wrap}
+.attempt-block.passed .attempt-header{background:#f0fdf4}
+.attempt-block.failed .attempt-header{background:#fef2f2}
+.attempt-num{font-weight:700;color:#374151}
+.attempt-score{font-weight:700;font-size:1rem;display:flex;align-items:center;gap:.4rem}
+.attempt-score.pass{color:#059669}
+.attempt-score.fail{color:#dc2626}
+.attempt-date{margin-left:auto;color:#9ca3af;font-size:.82rem}
+.breakdown-list{padding:1rem 1.25rem;display:flex;flex-direction:column;gap:.75rem}
+.brow{display:flex;gap:.75rem;padding:.75rem 1rem;border-radius:8px;background:#fff;border:1px solid #f3f4f6}
+.brow.ok{background:#f0fdf4;border-color:#bbf7d0}
+.brow.err{background:#fff7f7;border-color:#fecaca}
+.brow-indicator{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0;margin-top:.1rem}
+.brow.ok .brow-indicator{background:#059669;color:#fff}
+.brow.err .brow-indicator{background:#dc2626;color:#fff}
+.brow-body{flex:1;min-width:0}
+.brow-q{font-size:.92rem;line-height:1.5;color:#1f2937;margin-bottom:.4rem}
+.brow-code{background:#1e1e2e;color:#f8f8f2;padding:.6rem;border-radius:6px;font-size:.78rem;overflow-x:auto;margin-bottom:.5rem;white-space:pre-wrap}
+.brow-answers{display:flex;flex-direction:column;gap:.4rem;margin-top:.4rem}
+.ans-label{font-size:.78rem;color:#6b7280;margin-right:.4rem}
+.ans-chip{display:inline-block;padding:.2rem .6rem;border-radius:6px;font-size:.8rem;margin:.1rem}
+.ans-chip.wrong{background:#fee2e2;color:#991b1b}
+.ans-chip.right{background:#d1fae5;color:#065f46}
+.ans-chip.empty{background:#f3f4f6;color:#9ca3af}
+.explanation{margin-top:.4rem;font-size:.82rem;color:#6b7280;font-style:italic}
+/* dark */
+body.dark-mode .attempt-block{border-color:rgba(255,255,255,.1)}
+body.dark-mode .attempt-block.passed{border-color:#065f46}
+body.dark-mode .attempt-block.failed{border-color:#7f1d1d}
+body.dark-mode .attempt-header{background:#1c1c1e}
+body.dark-mode .attempt-block.passed .attempt-header{background:#022c22}
+body.dark-mode .attempt-block.failed .attempt-header{background:#450a0a}
+body.dark-mode .attempt-num{color:#f5f5f7}
+body.dark-mode .brow{background:#1c1c1e;border-color:rgba(255,255,255,.08)}
+body.dark-mode .brow.ok{background:#022c22;border-color:#065f46}
+body.dark-mode .brow.err{background:#450a0a;border-color:#7f1d1d}
+body.dark-mode .brow-q{color:#f5f5f7}
+</style>
+{% endblock %}

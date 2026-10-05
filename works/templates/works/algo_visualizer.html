@@ -1,0 +1,306 @@
+{% extends 'works/base.html' %}
+{% block title %}Визуализатор алгоритмов{% endblock %}
+{% block extra_head %}
+<style>
+.viz-page{max-width:1100px;margin:0 auto;padding:1.5rem 1rem}
+.vtabs{display:flex;gap:.5rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.vtab{padding:.5rem 1.25rem;border-radius:8px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-size:.9rem;font-weight:500;color:#374151;transition:.15s}
+.vtab.on{background:#667eea;color:#fff;border-color:#667eea}
+.vpanel{display:none}.vpanel.on{display:block}
+.vctrl{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:.75rem 1rem}
+.vctrl label{font-size:.85rem;color:#6b7280}
+.vbtn{padding:.4rem 1rem;border-radius:7px;border:none;cursor:pointer;font-size:.85rem;font-weight:600}
+.vbtn.go{background:#667eea;color:#fff}.vbtn.go:hover{background:#5a6fd6}
+.vbtn.rst{background:#ef4444;color:#fff}
+.vbtn:disabled{opacity:.5;cursor:default}
+#scv,#gcv{border-radius:10px;background:#f8fafc;border:1px solid #e5e7eb;display:block;width:100%}
+.vinfo{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:.75rem 1rem;font-size:.85rem;color:#1e40af;margin-top:.75rem;min-height:2.5rem}
+.vleg{display:flex;gap:1rem;flex-wrap:wrap;margin-top:.5rem;font-size:.82rem}
+.vleg span{display:flex;align-items:center;gap:.35rem}
+.ld{width:14px;height:14px;border-radius:3px;flex-shrink:0}
+</style>
+{% endblock %}
+{% block content %}
+<div class="viz-page">
+<h1 style="font-size:1.6rem;margin-bottom:1.25rem"><i class="fas fa-chart-bar" style="color:#667eea"></i> Визуализатор алгоритмов</h1>
+<div class="vtabs">
+  <button class="vtab on" onclick="switchTab('sort')">Сортировка</button>
+  <button class="vtab" onclick="switchTab('graph')">Обход графа BFS/DFS</button>
+</div>
+
+<div id="p-sort" class="vpanel on">
+  <div class="vctrl">
+    <label>Алгоритм:</label>
+    <select id="sAlgo"><option value="bubble">Пузырьковая</option><option value="selection">Выбором</option><option value="insertion">Вставками</option><option value="merge">Слиянием</option><option value="quick">Быстрая</option></select>
+    <label>Размер:</label><input type="range" id="sSize" min="6" max="50" value="20" style="width:90px"><span id="sSizeV">20</span>
+    <label>Скорость:</label><input type="range" id="sSpd" min="1" max="10" value="5" style="width:80px">
+    <button class="vbtn go" id="sStart" onclick="startSort()">&#9654; Старт</button>
+    <button class="vbtn rst" onclick="resetSort()">&#8635; Сброс</button>
+  </div>
+  <canvas id="scv" height="340"></canvas>
+  <div class="vleg">
+    <span><span class="ld" style="background:#667eea"></span>Не тронуто</span>
+    <span><span class="ld" style="background:#f59e0b"></span>Сравнение</span>
+    <span><span class="ld" style="background:#ef4444"></span>Перестановка</span>
+    <span><span class="ld" style="background:#10b981"></span>Готово</span>
+  </div>
+  <div class="vinfo" id="sInfo">Выберите алгоритм и нажмите Старт</div>
+</div>
+
+<div id="p-graph" class="vpanel">
+  <div class="vctrl">
+    <label>Алгоритм:</label>
+    <select id="gAlgo"><option value="bfs">BFS (в ширину)</option><option value="dfs">DFS (в глубину)</option></select>
+    <label>Скорость:</label><input type="range" id="gSpd" min="1" max="10" value="5" style="width:80px">
+    <button class="vbtn go" id="gStart" onclick="startGraph()">&#9654; Старт</button>
+    <button class="vbtn rst" onclick="resetGraph()">&#8635; Новый граф</button>
+  </div>
+  <canvas id="gcv" height="420"></canvas>
+  <div class="vleg">
+    <span><span class="ld" style="background:#e5e7eb;border:1px solid #9ca3af"></span>Не посещён</span>
+    <span><span class="ld" style="background:#fef3c7;border:1px solid #f59e0b"></span>Старт</span>
+    <span><span class="ld" style="background:#f59e0b"></span>В очереди</span>
+    <span><span class="ld" style="background:#667eea"></span>Обрабатывается</span>
+    <span><span class="ld" style="background:#10b981"></span>Посещён</span>
+  </div>
+  <div class="vinfo" id="gInfo">Кликните вершину для выбора старта, затем Старт</div>
+</div>
+</div>
+
+<script>
+(function(){
+var sc=document.getElementById('scv'), sx=sc.getContext('2d');
+var gc=document.getElementById('gcv'), gx=gc.getContext('2d');
+var arr=[], col=[], srun=false, ncmp=0, nswp=0;
+var gnodes=[], gedges=[], gstart=0, grun=false;
+var N=10;
+
+window.switchTab=function(name){
+  document.querySelectorAll('.vtab').forEach(function(t,i){t.classList.toggle('on',['sort','graph'][i]===name);});
+  document.querySelectorAll('.vpanel').forEach(function(p){p.classList.remove('on');});
+  document.getElementById('p-'+name).classList.add('on');
+  if(name==='sort') resetSort();
+  if(name==='graph') resetGraph();
+};
+
+function sms(){return 310-parseInt(document.getElementById('sSpd').value)*30;}
+function gms(){return 320-parseInt(document.getElementById('gSpd').value)*30;}
+function wait(d){return new Promise(function(r){setTimeout(r,d);});}
+
+document.getElementById('sSize').addEventListener('input',function(){
+  document.getElementById('sSizeV').textContent=this.value;
+  if(!srun) resetSort();
+});
+
+window.resetSort=function(){
+  srun=false;
+  var n=parseInt(document.getElementById('sSize').value);
+  arr=Array.from({length:n},function(){return Math.floor(Math.random()*90)+10;});
+  col=new Array(n).fill('#667eea');
+  ncmp=nswp=0;
+  document.getElementById('sStart').disabled=false;
+  drawSort();
+  document.getElementById('sInfo').textContent='Выберите алгоритм и нажмите Старт';
+};
+
+function drawSort(){
+  var W=sc.offsetWidth||900; sc.width=W;
+  var H=sc.height;
+  sx.clearRect(0,0,W,H);
+  var n=arr.length;
+  var barW=Math.max(2,Math.floor((W-n*2)/n));
+  var gap=Math.floor((W-n*barW)/(n+1));
+  var maxV=Math.max.apply(null,arr);
+  arr.forEach(function(v,i){
+    var x=gap+i*(barW+gap);
+    var bh=Math.floor((v/maxV)*(H-30));
+    sx.fillStyle=col[i];
+    sx.fillRect(x,H-bh-2,barW,bh);
+    if(barW>=18){
+      sx.fillStyle='#fff';
+      sx.font='bold '+Math.min(11,barW-2)+'px sans-serif';
+      sx.textAlign='center';
+      sx.fillText(v,x+barW/2,H-bh/2);
+    }
+  });
+}
+
+async function doSwap(i,j){
+  nswp++;
+  col[i]='#ef4444'; col[j]='#ef4444'; drawSort();
+  await wait(sms());
+  var t=arr[i]; arr[i]=arr[j]; arr[j]=t;
+  col[i]='#667eea'; col[j]='#667eea'; drawSort();
+}
+
+async function doCmp(i,j){
+  if(!srun) return;
+  ncmp++;
+  col[i]='#f59e0b'; col[j]='#f59e0b'; drawSort();
+  document.getElementById('sInfo').textContent='Сравнений: '+ncmp+'  Перестановок: '+nswp;
+  await wait(sms());
+  col[i]='#667eea'; col[j]='#667eea';
+}
+
+window.startSort=async function(){
+  if(srun) return;
+  srun=true;
+  document.getElementById('sStart').disabled=true;
+  col.fill('#667eea'); ncmp=nswp=0;
+  var algo=document.getElementById('sAlgo').value;
+  var n=arr.length;
+
+  if(algo==='bubble'){
+    for(var i=0;i<n-1&&srun;i++){
+      for(var j=0;j<n-i-1&&srun;j++){
+        await doCmp(j,j+1);
+        if(arr[j]>arr[j+1]) await doSwap(j,j+1);
+      }
+      col[n-i-1]='#10b981'; drawSort();
+    }
+    col[0]='#10b981';
+  } else if(algo==='selection'){
+    for(var i=0;i<n-1&&srun;i++){
+      var mi=i;
+      for(var j=i+1;j<n&&srun;j++){await doCmp(mi,j); if(arr[j]<arr[mi]) mi=j;}
+      if(mi!==i) await doSwap(i,mi);
+      col[i]='#10b981'; drawSort();
+    }
+    col[n-1]='#10b981';
+  } else if(algo==='insertion'){
+    col[0]='#10b981';
+    for(var i=1;i<n&&srun;i++){
+      var j=i;
+      while(j>0&&srun){
+        await doCmp(j-1,j);
+        if(arr[j]<arr[j-1]){await doSwap(j,j-1); j--;} else break;
+      }
+      col[i]='#10b981'; drawSort();
+    }
+  } else if(algo==='merge'){
+    async function merge(l,m,r){
+      var L=arr.slice(l,m+1), R=arr.slice(m+1,r+1), ii=0, jj=0, k=l;
+      while(ii<L.length&&jj<R.length&&srun){
+        ncmp++;
+        col[l+ii]='#f59e0b'; col[m+1+jj]='#f59e0b'; drawSort(); await wait(sms());
+        if(L[ii]<=R[jj]){arr[k++]=L[ii++];}else{arr[k++]=R[jj++]; nswp++;}
+        for(var q=l;q<=r;q++) col[q]='#667eea';
+        col[k-1]='#ef4444'; drawSort(); await wait(sms()/2); col[k-1]='#667eea';
+      }
+      while(ii<L.length&&srun) arr[k++]=L[ii++];
+      while(jj<R.length&&srun) arr[k++]=R[jj++];
+    }
+    async function ms(l,r){if(l>=r||!srun) return; var m=Math.floor((l+r)/2); await ms(l,m); await ms(m+1,r); await merge(l,m,r);}
+    await ms(0,n-1); col.fill('#10b981');
+  } else if(algo==='quick'){
+    async function part(l,r){
+      var pv=arr[r]; col[r]='#8b5cf6'; var ii=l-1;
+      for(var j=l;j<r&&srun;j++){await doCmp(j,r); if(arr[j]<=pv){ii++; await doSwap(ii,j);}}
+      await doSwap(ii+1,r); col[r]='#667eea'; return ii+1;
+    }
+    async function qs(l,r){if(l>=r||!srun) return; var p=await part(l,r); col[p]='#10b981'; drawSort(); await qs(l,p-1); await qs(p+1,r);}
+    await qs(0,n-1); col.fill('#10b981');
+  }
+
+  if(srun){col.fill('#10b981'); drawSort(); document.getElementById('sInfo').textContent='Готово! Сравнений: '+ncmp+', Перестановок: '+nswp;}
+  srun=false; document.getElementById('sStart').disabled=false;
+};
+
+// ── ГРАФ ──────────────────────────────────────────────────────────
+gc.addEventListener('click',function(e){
+  if(grun) return;
+  var r=gc.getBoundingClientRect();
+  var mx=(e.clientX-r.left)*(gc.width/r.width);
+  var my=(e.clientY-r.top)*(gc.height/r.height);
+  var near=0, minD=Infinity;
+  gnodes.forEach(function(n,i){var d=Math.hypot(n.x-mx,n.y-my); if(d<minD){minD=d;near=i;}});
+  if(minD<40){gstart=near; drawGraph(); document.getElementById('gInfo').textContent='Старт: вершина '+(near+1)+'. Нажмите Старт';}
+});
+
+window.resetGraph=function(){
+  grun=false;
+  document.getElementById('gStart').disabled=false;
+  var W=gc.offsetWidth||900; gc.width=W;
+  var H=gc.height;
+  gnodes=Array.from({length:N},function(_,i){
+    var a=(2*Math.PI*i)/N-Math.PI/2;
+    var rv=Math.min(W,H)*0.36;
+    return {x:W/2+rv*Math.cos(a)+(Math.random()-.5)*30, y:H/2+rv*Math.sin(a)+(Math.random()-.5)*30, c:'#e5e7eb', sc:'#9ca3af'};
+  });
+  gedges=[];
+  var vis=[0], pool=[1,2,3,4,5,6,7,8,9];
+  while(pool.length){var f=vis[Math.floor(Math.random()*vis.length)]; var ix=Math.floor(Math.random()*pool.length); var tt=pool.splice(ix,1)[0]; gedges.push([f,tt]); vis.push(tt);}
+  var ex=3, att=0;
+  while(ex>0&&att<200){att++; var a=Math.floor(Math.random()*N), b=Math.floor(Math.random()*N); if(a!==b&&!gedges.some(function(e){return (e[0]===a&&e[1]===b)||(e[0]===b&&e[1]===a);})){gedges.push([a,b]); ex--;}}
+  gstart=0; drawGraph();
+  document.getElementById('gInfo').textContent='Кликните вершину для выбора старта, затем Старт';
+};
+
+function drawGraph(){
+  var W=gc.width, H=gc.height;
+  gx.clearRect(0,0,W,H);
+  gx.strokeStyle='#d1d5db'; gx.lineWidth=2;
+  gedges.forEach(function(e){gx.beginPath(); gx.moveTo(gnodes[e[0]].x,gnodes[e[0]].y); gx.lineTo(gnodes[e[1]].x,gnodes[e[1]].y); gx.stroke();});
+  gnodes.forEach(function(n,i){
+    gx.beginPath(); gx.arc(n.x,n.y,22,0,2*Math.PI);
+    gx.fillStyle=(i===gstart&&n.c==='#e5e7eb')?'#fef3c7':n.c; gx.fill();
+    gx.strokeStyle=(i===gstart&&n.c==='#e5e7eb')?'#f59e0b':n.sc;
+    gx.lineWidth=i===gstart?3:2; gx.stroke();
+    gx.fillStyle=n.c==='#e5e7eb'?'#374151':'#fff';
+    gx.font='bold 13px sans-serif'; gx.textAlign='center'; gx.textBaseline='middle';
+    gx.fillText(i+1,n.x,n.y);
+  });
+}
+
+window.startGraph=async function(){
+  if(grun) return; grun=true;
+  document.getElementById('gStart').disabled=true;
+  gnodes.forEach(function(n){n.c='#e5e7eb'; n.sc='#9ca3af';});
+  var algo=document.getElementById('gAlgo').value;
+  var info=document.getElementById('gInfo');
+  var adj=Array.from({length:N},function(){return [];});
+  gedges.forEach(function(e){adj[e[0]].push(e[1]); adj[e[1]].push(e[0]);});
+  var order=[];
+
+  if(algo==='bfs'){
+    info.textContent='BFS: обходим граф в ширину…';
+    var queue=[gstart], visS=new Set([gstart]);
+    gnodes[gstart].c='#f59e0b'; gnodes[gstart].sc='#d97706'; drawGraph();
+    while(queue.length&&grun){
+      var cur=queue.shift();
+      gnodes[cur].c='#667eea'; gnodes[cur].sc='#4f46e5'; drawGraph();
+      await wait(gms());
+      order.push(cur+1);
+      info.textContent='BFS: порядок ['+order.join(' → ')+']';
+      for(var ni=0;ni<adj[cur].length;ni++){
+        var nb=adj[cur][ni];
+        if(!visS.has(nb)&&grun){visS.add(nb); gnodes[nb].c='#f59e0b'; gnodes[nb].sc='#d97706'; drawGraph(); await wait(Math.floor(gms()/2)); queue.push(nb);}
+      }
+      gnodes[cur].c='#10b981'; gnodes[cur].sc='#059669'; drawGraph();
+    }
+  } else {
+    info.textContent='DFS: обходим граф в глубину…';
+    var visD=new Set();
+    async function dfs(v){
+      if(!grun||visD.has(v)) return;
+      visD.add(v); gnodes[v].c='#667eea'; gnodes[v].sc='#4f46e5'; drawGraph();
+      await wait(gms()); order.push(v+1);
+      info.textContent='DFS: порядок ['+order.join(' → ')+']';
+      for(var ni=0;ni<adj[v].length;ni++){
+        var nb=adj[v][ni];
+        if(!visD.has(nb)&&grun){gnodes[nb].c='#f59e0b'; gnodes[nb].sc='#d97706'; drawGraph(); await wait(Math.floor(gms()/2)); await dfs(nb);}
+      }
+      gnodes[v].c='#10b981'; gnodes[v].sc='#059669'; drawGraph();
+    }
+    await dfs(gstart);
+  }
+
+  if(grun) info.textContent='Готово! Порядок обхода: ['+order.join(' → ')+']';
+  grun=false; document.getElementById('gStart').disabled=false;
+};
+
+resetSort(); resetGraph();
+window.addEventListener('resize',function(){if(!srun) drawSort(); if(!grun) drawGraph();});
+})();
+</script>
+{% endblock %}

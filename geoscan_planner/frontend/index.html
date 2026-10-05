@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Geoscan UAV Planner</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+  <link rel="stylesheet" href="style.css?v=20260923h" />
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="logo">
+        <img src="geoscan_logo.svg" onerror="this.style.display='none'" alt="" />
+        <span>UAV Planner</span>
+      </div>
+
+      <!-- Step 1: Zones -->
+      <section class="panel">
+        <h3>1. Зоны</h3>
+        <div class="btn-row">
+          <button id="btn-draw-area" class="btn btn-primary" title="Зона съёмки">✏️ Зона</button>
+          <button id="btn-draw-airspace" class="btn btn-airspace" title="Граница воздушного пространства">✈️ ВП</button>
+          <button id="btn-draw-nfz" class="btn btn-warn" title="Бесполётная зона">⛔ БЗ</button>
+          <button id="btn-add-site" class="btn btn-site" title="Взлётно-посадочный пункт">🏁 ВПП</button>
+          <button id="btn-add-reserve" class="btn btn-reserve" title="Резервная площадка посадки">🛬 Рез.</button>
+          <button id="btn-clear" class="btn btn-ghost">🗑</button>
+        </div>
+        <div class="btn-row" style="margin-top:4px">
+          <button id="btn-import-geojson" class="btn btn-ghost btn-sm" title="Загрузить зоны из GeoJSON-файла">📂 Импорт GeoJSON</button>
+          <button id="btn-import-kml" class="btn btn-ghost btn-sm" title="Загрузить зоны из KML-файла">📂 Импорт KML</button>
+          <button id="btn-load-demo" class="btn btn-ghost btn-sm" title="Демо: 1 БПЛА, 2 зоны + БЗ (обход снизу)">🗺 Демо 1 БВС</button>
+          <button id="btn-load-demo2" class="btn btn-ghost btn-sm" title="Демо: 2 БПЛА из разных точек, по одной зоне каждый">🗺 Демо 2 БВС</button>
+          <button id="btn-load-demo3" class="btn btn-ghost btn-sm" title="Демо: Геоскан 201 + Геоскан 401 (смешанный парк)">🗺 Демо 201+401</button>
+        </div>
+        <div class="btn-row" style="margin-top:4px">
+          <button id="btn-save-scenario" class="btn btn-ghost btn-sm" title="Сохранить сценарий в JSON">💾 Сохранить</button>
+          <button id="btn-load-scenario" class="btn btn-ghost btn-sm" title="Загрузить сценарий из JSON">📂 Сценарий</button>
+          <button id="btn-tour" class="btn btn-ghost btn-sm" title="Интерактивный обзор возможностей планировщика" style="border-color:var(--accent);color:var(--accent)">🎯 Тур</button>
+          <button id="btn-share" class="btn btn-ghost btn-sm" title="Скопировать ссылку на текущий сценарий в буфер обмена">🔗 Ссылка</button>
+        </div>
+        <input type="file" id="import-file" accept=".geojson,.json" style="display:none" />
+        <input type="file" id="import-kml-file" accept=".kml" style="display:none" />
+        <input type="file" id="scenario-file" accept=".json" style="display:none" />
+        <div id="area-info" class="info-box">Зона не задана</div>
+        <div id="legend" class="legend">
+          <span class="legend-item area">Зона съёмки</span>
+          <span class="legend-item airspace">Возд. пространство</span>
+          <span class="legend-item nfz">Бесполётная</span>
+          <span class="legend-item site">ВПП</span>
+          <span class="legend-item reserve">Резерв. площадка</span>
+          <span class="legend-item detour">Обход БЗ</span>
+          <span class="legend-item" style="border-left:3px dashed #ef4444;padding-left:6px;color:var(--text2)">Буфер 80м</span>
+        </div>
+      </section>
+
+      <!-- Step 2: UAVs -->
+      <section class="panel">
+        <h3>2. Парк БВС</h3>
+        <div id="uav-list"></div>
+        <button id="btn-add-uav" class="btn btn-secondary">+ Добавить БВС</button>
+      </section>
+
+      <!-- Step 3: Parameters -->
+      <section class="panel">
+        <h3>3. Параметры</h3>
+        <label>Шаблон задачи
+          <select id="task-template">
+            <option value="">— Параметры вручную —</option>
+            <option value="agriculture">🌾 Аграрный обзор (NDVI)</option>
+            <option value="mapping">🗺️ Топографическая съёмка</option>
+            <option value="infrastructure">🏗️ Инспекция инфраструктуры</option>
+            <option value="search">🔍 Поисково-спасательная операция</option>
+            <option value="lidar">📡 LiDAR картирование</option>
+          </select>
+        </label>
+        <label>Высота AGL (м)
+          <input id="altitude" type="number" value="150" min="20" max="4000" />
+        </label>
+        <label>Тип съёмки
+          <select id="payload-type">
+            <option value="rgb">RGB (видимый диапазон)</option>
+            <option value="multispectral">Мультиспектральная</option>
+            <option value="ir">Инфракрасная (ИК)</option>
+            <option value="lidar">LiDAR (лазерное сканирование)</option>
+            <option value="geophysical">Геофизическая</option>
+          </select>
+        </label>
+        <div id="payload-info" style="display:none"></div>
+        <label>Перекрытие боковое (%)
+          <input id="overlap-side" type="number" value="30" min="0" max="90" />
+        </label>
+        <label>Перекрытие продольное (%)
+          <input id="overlap-front" type="number" value="70" min="0" max="95" />
+        </label>
+        <label>Скорость ветра (м/с)
+          <input id="wind-speed" type="number" value="0" min="0" max="20" step="0.5" />
+        </label>
+        <label>Направление ветра (°)
+          <input id="wind-dir" type="number" value="0" min="0" max="359" />
+        </label>
+        <label>Оптимизация
+          <select id="optimization">
+            <option value="both" selected>Оба критерия</option>
+            <option value="min_time">Минимум времени выполнения</option>
+            <option value="min_wear">Минимум износа (лётных часов)</option>
+          </select>
+        </label>
+        <label>Время вылета (местное)
+          <input id="departure-time" type="time" value="09:00" />
+        </label>
+        <label title="Затраты на развёртывание одного БПЛА: транспорт, подготовка, катапульта — в эквивалентных минутах налёта. Влияет на сравнение стратегий оптимизации.">
+          Штраф за запуск (мин/БПЛА)
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="startup-cost" type="range" min="0" max="120" value="30" step="5" style="flex:1" />
+            <span id="startup-cost-val" style="width:28px;text-align:right;font-size:12px">30</span>
+          </div>
+        </label>
+      </section>
+
+      <button id="btn-plan" class="btn btn-success big">🚀 Рассчитать маршруты</button>
+
+      <!-- Results -->
+      <section class="panel" id="results-panel" style="display:none">
+        <h3>4. Результаты</h3>
+        <div id="results-comparison"></div>
+        <div id="results-summary"></div>
+
+        <!-- Optimization toggle (shown when both calculated) -->
+        <div id="opt-toggle" class="opt-toggle" style="display:none">
+          <button id="btn-show-min-time" class="btn btn-sm btn-primary active-opt">⏱ Мин. время</button>
+          <button id="btn-show-min-wear" class="btn btn-sm btn-secondary">🔧 Мин. износ</button>
+        </div>
+
+        <!-- Photo coverage toggle -->
+        <div style="display:flex;flex-direction:column;gap:4px;margin:4px 0">
+          <label style="flex-direction:row;align-items:center;gap:6px;margin:0">
+            <input type="checkbox" id="chk-photos" checked /> <span style="font-size:11px;color:var(--text2)">Точки съёмки на карте</span>
+          </label>
+          <label style="flex-direction:row;align-items:center;gap:6px;margin:0">
+            <input type="checkbox" id="chk-footprints" /> <span style="font-size:11px;color:var(--text2)">Полосы захвата на карте</span>
+          </label>
+        </div>
+
+        <!-- Export single plan -->
+        <div class="btn-row" id="export-row-single">
+          <button id="btn-export-kml" class="btn btn-secondary btn-sm">⬇ KML</button>
+          <button id="btn-export-geojson" class="btn btn-secondary btn-sm">⬇ GeoJSON</button>
+          <button id="btn-export-mavlink" class="btn btn-secondary btn-sm">⬇ MAVLink</button>
+          <button id="btn-export-csv" class="btn btn-secondary btn-sm">⬇ CSV</button>
+          <button id="btn-export-footprints" class="btn btn-secondary btn-sm">⬇ Полосы</button>
+          <button id="btn-export-report" class="btn btn-secondary btn-sm">📋 Отчёт</button>
+          <button id="btn-preflight" class="btn btn-ghost btn-sm">🔧 Pre-flight</button>
+        </div>
+        <!-- Always-visible tools row -->
+        <div class="btn-row" style="margin-top:4px">
+          <button id="btn-gcp" class="btn btn-ghost btn-sm" title="Расставить наземные контрольные точки (ГКТ)">📍 ГКТ</button>
+          <button id="btn-weather" class="btn btn-ghost btn-sm" title="Получить актуальный прогноз погоды для зоны миссии">🌤 Погода</button>
+          <button id="btn-alt-calc" class="btn btn-ghost btn-sm" title="Рассчитать оптимальную высоту по целевому GSD">🔭 Высота</button>
+        </div>
+        <!-- Export both plans (shown when both computed) -->
+        <div id="export-row-both" style="display:none">
+          <div class="btn-row">
+            <button id="btn-export-kml-time" class="btn btn-secondary btn-sm">⬇ KML (время)</button>
+            <button id="btn-export-kml-wear" class="btn btn-secondary btn-sm">⬇ KML (износ)</button>
+          </div>
+          <div class="btn-row" style="margin-top:4px">
+            <button id="btn-export-gj-time" class="btn btn-secondary btn-sm">⬇ GeoJSON (время)</button>
+            <button id="btn-export-gj-wear" class="btn btn-secondary btn-sm">⬇ GeoJSON (износ)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Fleet reference -->
+      <section class="panel fleet-ref-section">
+        <button id="fleet-ref-toggle" class="btn btn-ghost" style="width:100%;text-align:left;font-size:11px">▼ Справочник БВС</button>
+        <div id="fleet-ref-panel" style="display:none;overflow-x:auto;margin-top:8px">
+          <table class="fleet-table">
+            <thead>
+              <tr>
+                <th>БВС</th><th>Тип</th><th>Налёт</th><th>Скорость</th>
+                <th>Ветер</th><th>Высота</th><th>Взлёт / Посадка</th><th>Нагрузка</th>
+              </tr>
+            </thead>
+            <tbody id="fleet-ref-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div id="status-bar"></div>
+    </aside>
+
+    <div id="map"></div>
+  </div>
+
+  <script src="app.js?v=20260923z30"></script>
+</body>
+</html>

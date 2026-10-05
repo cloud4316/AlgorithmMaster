@@ -13,7 +13,12 @@
       <h1><i class="fas fa-code"></i> Практические работы</h1>
       <p class="page-subtitle">Закрепляй знания — пиши код, сдавай задачи</p>
     </div>
-    <a href="{% url 'leaderboard' %}" class="btn btn-ghost"><i class="fas fa-trophy"></i> Рейтинг</a>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <a href="{% url 'leaderboard' %}" class="btn btn-ghost"><i class="fas fa-trophy"></i> Рейтинг</a>
+      <button id="btn-send-review" onclick="submitAllForReview()" class="btn btn-primary" style="white-space:nowrap">
+        <i class="fas fa-paper-plane"></i> Отправить на проверку
+      </button>
+    </div>
   </div>
 
   <!-- Фильтры -->
@@ -31,7 +36,15 @@
 
   <div class="grid-auto">
     {% for work in works %}
-    <a href="{% url 'work_detail' work.id %}" class="card card-hover animate-in" style="text-decoration:none;animation-delay:{{ forloop.counter0 }}0ms">
+    <a href="{% url 'work_detail' work.id %}" class="card card-hover animate-in{% if work.user_status == 'correct' %} wl-done{% elif work.user_status == 'partially_correct' %} wl-partial{% elif work.user_status == 'incorrect' %} wl-fail{% elif work.user_status != 'not_started' %} wl-pending{% endif %}" style="text-decoration:none;animation-delay:{{ forloop.counter0 }}0ms;position:relative">
+      {% if work.user_status != 'not_started' %}
+      <span class="wl-badge {% if work.user_status == 'correct' %}wlb-ok{% elif work.user_status == 'partially_correct' %}wlb-partial{% elif work.user_status == 'incorrect' %}wlb-fail{% else %}wlb-pending{% endif %}">
+        {% if work.user_status == 'correct' %}<i class="fas fa-check"></i> Сдано{% if work.user_score %} · {{ work.user_score }}%{% endif %}
+        {% elif work.user_status == 'partially_correct' %}<i class="fas fa-adjust"></i> Частично{% if work.user_score %} · {{ work.user_score }}%{% endif %}
+        {% elif work.user_status == 'incorrect' %}<i class="fas fa-times"></i> Неверно
+        {% else %}<i class="fas fa-clock"></i> На проверке{% endif %}
+      </span>
+      {% endif %}
       <div class="card-body">
         <div class="flex-between mb-2">
           <span class="badge badge-neutral">ПР №{{ work.order }}</span>
@@ -45,7 +58,6 @@
         </p>
         <div class="flex-between">
           <span class="text-muted text-xs"><i class="fas fa-star" style="color:var(--warning)"></i> {{ work.max_score }} баллов</span>
-          
           <span class="badge badge-primary"><i class="fab fa-python"></i> Python</span>
         </div>
       </div>
@@ -64,6 +76,21 @@
 .deadline-chip { transition: color .2s; }
 .deadline-chip.deadline-overdue { color: #ef4444 !important; }
 .deadline-chip.deadline-soon    { color: #f59e0b !important; }
+/* Статус сданных работ */
+.wl-badge{
+  position:absolute;top:10px;right:10px;
+  display:inline-flex;align-items:center;gap:.3rem;
+  padding:.2rem .6rem;border-radius:20px;
+  font-size:.7rem;font-weight:700;z-index:2;pointer-events:none;
+}
+.wlb-ok     {background:#d1fae5;color:#065f46}
+.wlb-partial{background:#fef9c3;color:#854d0e}
+.wlb-fail   {background:#fee2e2;color:#991b1b}
+.wlb-pending{background:#dbeafe;color:#1e40af}
+.wl-done   {border-left:3px solid #10b981!important}
+.wl-partial{border-left:3px solid #f59e0b!important}
+.wl-fail   {border-left:3px solid #ef4444!important}
+.wl-pending{border-left:3px solid #3b82f6!important}
 </style>
 <script>
 (function(){
@@ -85,5 +112,76 @@
     }
   });
 })();
+
+function submitAllForReview() {
+  var modal = document.getElementById('modal-review-confirm');
+  if (modal) modal.style.display = 'flex';
+}
+function closeReviewModal() {
+  var modal = document.getElementById('modal-review-confirm');
+  if (modal) modal.style.display = 'none';
+}
+function confirmReview() {
+  var btn = document.getElementById('btn-send-review');
+  var confirmBtn = document.getElementById('btn-confirm-send');
+  var comment = (document.getElementById('review-comment') || {}).value || '';
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка…'; }
+
+  var csrfToken = document.cookie.split(';').map(function(c){return c.trim();})
+    .find(function(c){return c.startsWith('csrftoken=');});
+  csrfToken = csrfToken ? csrfToken.split('=')[1] : '';
+
+  var form = new FormData();
+  form.append('comment', comment);
+
+  fetch('{% url "submit_all_for_review" %}', {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrfToken},
+    body: form,
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data) {
+    closeReviewModal();
+    if (data.ok) {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-check"></i> Запрос отправлен';
+        btn.style.background = '#10b981';
+      }
+      var toast = document.createElement('div');
+      var aiMsg = data.ai_launched > 0 ? ', ИИ проверяет ' + data.ai_launched + ' работ' : '';
+      toast.textContent = 'Запрос отправлен (' + data.solutions_count + ' работ' + aiMsg + ')';
+      toast.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;background:#10b981;color:#fff;padding:.75rem 1.25rem;border-radius:10px;font-size:.9rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15)';
+      document.body.appendChild(toast);
+      setTimeout(function(){ toast.remove(); }, 4000);
+    } else {
+      alert(data.error || 'Ошибка');
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = 'Отправить'; }
+    }
+  })
+  .catch(function() {
+    alert('Ошибка сети');
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.innerHTML = 'Отправить'; }
+  });
+}
 </script>
+
+<!-- Модал подтверждения -->
+<div id="modal-review-confirm" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:2rem;max-width:420px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <h3 style="margin:0 0 .5rem;font-size:1.1rem;display:flex;align-items:center;gap:.5rem">
+      <i class="fas fa-paper-plane" style="color:#667eea"></i> Отправить на проверку
+    </h3>
+    <p style="color:#6b7280;font-size:.9rem;margin:0 0 1rem">
+      Преподаватель получит уведомление и проверит ваши сданные работы.
+    </p>
+    <label style="font-size:.85rem;font-weight:600;color:#374151;display:block;margin-bottom:.35rem">Комментарий (необязательно)</label>
+    <textarea id="review-comment" placeholder="Например: прошу обратить внимание на ПР №3…" rows="3"
+      style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:.6rem .75rem;font-size:.88rem;resize:vertical;outline:none;font-family:inherit"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">
+      <button onclick="closeReviewModal()" style="padding:.5rem 1rem;border:1px solid #d1d5db;border-radius:8px;background:#fff;cursor:pointer;font-size:.9rem">Отмена</button>
+      <button id="btn-confirm-send" onclick="confirmReview()" style="padding:.5rem 1.25rem;border:none;border-radius:8px;background:#667eea;color:#fff;cursor:pointer;font-size:.9rem;font-weight:600">Отправить</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

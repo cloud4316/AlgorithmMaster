@@ -58,6 +58,13 @@
 .te-cnt{background:#fef3c7;color:#92400e;padding:.15rem .5rem;border-radius:12px;font-size:.78rem;font-weight:700;white-space:nowrap;flex-shrink:0}
 .te-msg{font-family:monospace;font-size:.82rem;color:#374151;word-break:break-all}
 @media(max-width:768px){.stat-cards{grid-template-columns:repeat(2,1fr)}.charts-grid{grid-template-columns:1fr}}
+body.dark-mode .chart-card{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .hardest-card{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .works-table-wrap{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .error-work-card{background:#1c1c1e;border-color:rgba(239,68,68,.2)}
+body.dark-mode .top-error-row{background:rgba(245,158,11,.08);border-color:rgba(253,212,130,.2)}
+body.dark-mode .te-msg{color:#f5f5f7}
+body.dark-mode .ew-cnt{color:#98989d}
 </style>
 {% endblock %}
 {% block content %}
@@ -174,6 +181,122 @@
   </div>
   {% endif %}
 
+  <!-- ═══ Запросы на проверку ══════════════════════════════════════ -->
+  {% if review_requests %}
+  <div class="chart-card" style="margin-bottom:1.5rem;border-left:4px solid #667eea">
+    <h3 style="margin-bottom:1rem">
+      <i class="fas fa-bell" style="color:#667eea"></i>
+      Запросы на проверку
+      <span style="background:#667eea;color:#fff;border-radius:20px;padding:.1rem .55rem;font-size:.78rem;margin-left:.4rem">{{ review_pending_count }}</span>
+    </h3>
+    <div style="display:flex;flex-direction:column;gap:.5rem">
+      {% for rr in review_requests %}
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:.75rem 1rem;display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap"
+           data-rr-id="{{ rr.id }}">
+        <div style="flex:1;min-width:160px">
+          <div style="font-weight:600;font-size:.9rem">{{ rr.student.get_full_name|default:rr.student.username }}</div>
+          <div style="font-size:.8rem;color:#6b7280">{{ rr.requested_at|date:"d.m.Y H:i" }} · {{ rr.solutions_count }} работ</div>
+          {% if rr.comment %}<div style="font-size:.82rem;color:#374151;margin-top:.3rem;font-style:italic">"{{ rr.comment }}"</div>{% endif %}
+        </div>
+        <div style="display:flex;gap:.5rem;flex-shrink:0">
+          <a href="{% url 'teacher_solutions' %}?student={{ rr.student.id }}" class="btn btn-ghost" style="font-size:.82rem;padding:.35rem .8rem">
+            <i class="fas fa-eye"></i> Работы
+          </a>
+          <button onclick="markReviewDone({{ rr.id }}, this)" style="font-size:.82rem;padding:.35rem .8rem;border:1px solid #10b981;border-radius:8px;background:#fff;color:#10b981;cursor:pointer">
+            <i class="fas fa-check"></i> Готово
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ═══ Тепловая карта активности ══════════════════════════════ -->
+  <div class="chart-card" style="margin-bottom:1.5rem">
+    <h3><i class="fas fa-fire" style="color:#ef4444"></i> Активность за 90 дней (решений в день)</h3>
+    <div id="heatmap" style="overflow-x:auto;padding:.5rem 0"></div>
+    <div style="display:flex;align-items:center;gap:.5rem;font-size:.78rem;color:#9ca3af;margin-top:.5rem">
+      <span>Меньше</span>
+      <span style="display:flex;gap:2px">
+        <span style="width:12px;height:12px;background:#f3f4f6;border-radius:2px;display:inline-block"></span>
+        <span style="width:12px;height:12px;background:#bfdbfe;border-radius:2px;display:inline-block"></span>
+        <span style="width:12px;height:12px;background:#93c5fd;border-radius:2px;display:inline-block"></span>
+        <span style="width:12px;height:12px;background:#3b82f6;border-radius:2px;display:inline-block"></span>
+        <span style="width:12px;height:12px;background:#1d4ed8;border-radius:2px;display:inline-block"></span>
+      </span>
+      <span>Больше</span>
+    </div>
+  </div>
+
+  <!-- ═══ Статистика тестов ══════════════════════════════════════ -->
+  <div class="works-table-wrap" style="margin-bottom:1.5rem">
+    <h3 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+      <span><i class="fas fa-clipboard-check" style="color:#667eea"></i> Статистика тестов по студентам</span>
+      <span style="font-size:.8rem;color:#6b7280;font-weight:400">{{ total_quizzes }} тест{{ total_quizzes|pluralize:",,ов" }}</span>
+    </h3>
+    <div style="overflow-x:auto">
+      <table class="works-table" style="font-size:.8rem;min-width:700px">
+        <thead>
+          <tr>
+            <th style="min-width:160px">Студент</th>
+            {% for q in all_quizzes %}
+            <th class="tc" title="{{ q.title }}" style="min-width:52px;max-width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              M{{ q.module.order }}
+            </th>
+            {% endfor %}
+            <th class="tc" style="min-width:60px">Сдано</th>
+            <th class="tc" style="min-width:60px">Зачёт</th>
+            <th class="tc" style="min-width:60px">%</th>
+          </tr>
+          <!-- Итого по тесту -->
+          <tr style="background:#f0f4ff;font-size:.75rem">
+            <td style="color:#6b7280;font-style:italic">Всего сдали / прошли</td>
+            {% for s in quiz_summary %}
+            <td class="tc" title="{{ s.quiz.title }}">
+              <span style="color:#374151">{{ s.taken }}</span>/<span style="color:#059669">{{ s.passed }}</span>
+            </td>
+            {% endfor %}
+            <td></td><td></td><td></td>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in quiz_student_rows %}
+          <tr>
+            <td>
+              <span style="color:#374151;font-weight:500">{{ row.user.last_name }} {{ row.user.first_name|slice:":1" }}.</span>
+            </td>
+            {% for a in row.attempts %}
+            <td class="tc">
+              {% if a %}
+                {% if a.passed %}
+                  <span style="color:#059669;font-weight:600" title="Балл: {{ a.score }}%">{{ a.score }}</span>
+                {% else %}
+                  <span style="color:#dc2626" title="Балл: {{ a.score }}%">{{ a.score }}</span>
+                {% endif %}
+              {% else %}
+                <span style="color:#d1d5db">—</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+            <td class="tc"><b>{{ row.total_taken }}</b>/{{ total_quizzes }}</td>
+            <td class="tc" style="color:#059669;font-weight:600">{{ row.total_passed }}</td>
+            <td class="tc">
+              {% if row.total_taken %}
+                <span class="pr-badge {% if row.pass_rate >= 70 %}pr-ok{% elif row.pass_rate >= 40 %}pr-mid{% else %}pr-low{% endif %}">
+                  {{ row.pass_rate }}%
+                </span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="100" style="text-align:center;color:#9ca3af;padding:1.5rem">Нет студентов</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="export-row">
     <a href="{% url 'teacher_solutions' %}" class="btn-nav"><i class="fas fa-file-code"></i> Все решения</a>
     <a href="{% url 'gradebook' %}" class="btn-nav"><i class="fas fa-book-open"></i> Журнал</a>
@@ -237,5 +360,54 @@ new Chart(actCtx, {
     scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
   }
 });
+
+// ── Тепловая карта ──────────────────────────────────────────────
+(function(){
+  var data = {{ heatmap_json|safe }};
+  var keys = Object.keys(data).sort();
+  var maxV = Math.max.apply(null, Object.values(data).concat([1]));
+  function color(v){
+    if(!v) return '#f3f4f6';
+    var p=v/maxV;
+    if(p<0.2) return '#bfdbfe';
+    if(p<0.4) return '#93c5fd';
+    if(p<0.7) return '#3b82f6';
+    return '#1d4ed8';
+  }
+  var html='<div style="display:flex;gap:3px;align-items:flex-end;flex-wrap:nowrap">';
+  var weeks={};
+  keys.forEach(function(k){
+    var d=new Date(k);
+    var week=Math.floor(keys.indexOf(k)/7);
+    if(!weeks[week]) weeks[week]=[];
+    weeks[week].push({k:k,v:data[k],d:d});
+  });
+  Object.values(weeks).forEach(function(days){
+    html+='<div style="display:flex;flex-direction:column;gap:3px">';
+    days.forEach(function(item){
+      var label=item.d.toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})+': '+item.v+' реш.';
+      html+='<div title="'+label+'" style="width:13px;height:13px;border-radius:2px;background:'+color(item.v)+';cursor:default;flex-shrink:0"></div>';
+    });
+    html+='</div>';
+  });
+  html+='</div>';
+  document.getElementById('heatmap').innerHTML=html;
+})();
+
+function markReviewDone(rrId, btn) {
+  var csrf = document.cookie.split(';').map(function(c){return c.trim();})
+    .find(function(c){return c.startsWith('csrftoken=');});
+  csrf = csrf ? csrf.split('=')[1] : '';
+  fetch('/api/review-request/' + rrId + '/done/', {
+    method: 'POST', headers: {'X-CSRFToken': csrf},
+  })
+  .then(function(r){return r.json();})
+  .then(function(d){
+    if (d.ok) {
+      var row = btn.closest('[data-rr-id]');
+      if (row) row.remove();
+    }
+  });
+}
 </script>
 {% endblock %}

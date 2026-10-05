@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<title>PyGrid</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f1a;--panel:#13162a;--panel2:#1a1d35;--border:#252845;
+  --accent:#7c6af7;--accent-glow:rgba(124,106,247,.22);--teal:#4ecdc4;
+  --success:#52d68a;--warn:#f7c948;--error:#ff6b6b;
+  --text:#e8eaf6;--muted:#6b6f96;--code-bg:#0a0c18;--canvas-bg:#0f111e;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text)}
+#app{display:grid;grid-template-columns:390px 1fr;height:100vh}
+/* Sidebar */
+#sidebar{display:flex;flex-direction:column;background:var(--panel);border-right:1px solid var(--border);overflow:hidden}
+#level-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--panel2)}
+#level-title{font-weight:700;font-size:.88rem;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#level-num{font-size:.72rem;color:var(--muted);background:var(--border);padding:2px 8px;border-radius:20px;white-space:nowrap}
+#stars-display{display:flex;gap:2px}
+.star{font-size:13px;filter:grayscale(1);opacity:.35;transition:.3s}
+.star.earned{filter:none;opacity:1}
+#task-panel{padding:10px 14px;border-bottom:1px solid var(--border);font-size:.78rem;line-height:1.55;color:var(--text)}
+#task-panel h4{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px}
+#api-hint{border-bottom:1px solid var(--border);background:var(--code-bg)}
+#api-hint summary{font-size:.72rem;cursor:pointer;color:var(--muted);padding:8px 14px;list-style:none;display:flex;align-items:center;gap:6px}
+#api-hint summary::marker,#api-hint summary::-webkit-details-marker{display:none}
+#api-hint summary::before{content:'▶';font-size:.55rem;transition:.2s}
+#api-hint[open] summary::before{content:'▼'}
+#api-hint pre{font-family:'JetBrains Mono',monospace;font-size:.67rem;color:#a5b4fc;padding:0 14px 10px;line-height:1.65;overflow-x:auto}
+#editor-wrap{flex:1;display:flex;flex-direction:column;min-height:0}
+#code{flex:1;background:var(--code-bg);color:#c5cff5;font-family:'JetBrains Mono',monospace;font-size:.78rem;line-height:1.75;border:none;resize:none;outline:none;padding:12px 14px;tab-size:4}
+#code::selection{background:#7c6af730}
+#controls{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--border);background:var(--panel2);align-items:center}
+#btn-run{background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-weight:600;font-size:.8rem;cursor:pointer;display:flex;align-items:center;gap:5px;transition:.15s;white-space:nowrap}
+#btn-run:hover{background:#9484ff;box-shadow:0 0 14px var(--accent-glow)}
+#btn-run:disabled{opacity:.45;cursor:not-allowed}
+#btn-reset{background:transparent;color:var(--muted);border:1px solid var(--border);padding:7px 12px;border-radius:6px;font-size:.8rem;cursor:pointer;transition:.15s;white-space:nowrap}
+#btn-reset:hover{border-color:var(--accent);color:var(--accent)}
+#speed-wrap{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:.7rem;color:var(--muted);white-space:nowrap}
+input[type=range]#speed{width:55px;accent-color:var(--accent)}
+#output-panel{height:85px;background:#060810;border-top:1px solid var(--border);overflow-y:auto;padding:7px 12px;font-family:'JetBrains Mono',monospace;font-size:.7rem;line-height:1.6}
+.out-line{color:#8db88a}.out-err{color:var(--error)}.out-sys{color:var(--muted)}
+/* Canvas */
+#canvas-wrap{position:relative;background:var(--canvas-bg)}
+#three-canvas{display:block;width:100%;height:100%}
+/* HUD */
+#hud{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.hud-chip{background:rgba(13,15,26,.88);border:1px solid var(--border);border-radius:8px;padding:5px 11px;font-size:.72rem;display:flex;align-items:center;gap:6px;backdrop-filter:blur(6px)}
+/* Banner */
+#status-banner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,12,24,.96);border:2px solid var(--success);border-radius:16px;padding:26px 38px;text-align:center;display:none;backdrop-filter:blur(10px);z-index:10;min-width:280px}
+#status-banner h2{font-size:1.4rem;margin-bottom:6px}
+#status-banner p{color:var(--muted);font-size:.82rem;margin-bottom:14px}
+.stars-big{font-size:1.8rem;margin-bottom:10px;letter-spacing:4px}
+.btn-next{background:var(--accent);color:#fff;border:none;padding:9px 26px;border-radius:8px;font-size:.88rem;font-weight:700;cursor:pointer}
+.btn-next:hover{background:#9484ff}
+/* Level picker */
+#level-picker{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:5px;pointer-events:all}
+.lv-dot{width:25px;height:25px;border-radius:50%;border:2px solid var(--border);background:var(--panel);cursor:pointer;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:.15s}
+.lv-dot.active{border-color:var(--accent);color:var(--accent);background:rgba(124,106,247,.15)}
+.lv-dot.done{border-color:var(--success);background:rgba(82,214,138,.12);color:var(--success)}
+.lv-dot.locked{opacity:.3;cursor:not-allowed}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.shake{animation:shake .28s}
+::-webkit-scrollbar{width:3px;height:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+@media(max-width:700px){#app{grid-template-columns:1fr;grid-template-rows:55vh 45vh}#sidebar{border-right:none;border-bottom:1px solid var(--border)}}
+/* Stats overlay */
+#stats-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:50;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#stats-overlay.open{display:flex}
+#stats-box{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:24px;width:min(700px,95vw);max-height:85vh;overflow-y:auto}
+#stats-box h2{font-size:1rem;margin-bottom:16px;color:var(--text)}
+.stats-table{width:100%;border-collapse:collapse;font-size:.73rem}
+.stats-table th{text-align:left;padding:5px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:500}
+.stats-table td{padding:5px 10px;border-bottom:1px solid rgba(37,40,69,.5)}
+.stats-table tr:hover td{background:rgba(124,106,247,.06)}
+.st-done{color:var(--success)}
+.st-partial{color:var(--warn)}
+.st-none{color:var(--muted)}
+.st-steps{color:var(--teal);font-family:'JetBrains Mono',monospace}
+#btn-stats,#btn-lb{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 10px;border-radius:6px;font-size:.8rem;cursor:pointer;transition:.15s}
+#btn-stats:hover,#btn-lb:hover{border-color:var(--accent);color:var(--accent)}
+#btn-close-stats{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:7px 18px;border-radius:6px;cursor:pointer;font-size:.8rem;margin-top:14px;float:right}
+/* Hints — toast */
+#btn-hint{background:transparent;border:1px solid var(--warn);color:var(--warn);padding:7px 10px;border-radius:6px;font-size:.8rem;cursor:pointer;transition:.15s;position:relative}
+#btn-hint:hover{background:rgba(247,201,72,.15)}
+#btn-hint:disabled{opacity:.35;cursor:not-allowed}
+#hint-badge{position:absolute;top:-5px;right:-5px;background:var(--warn);color:#1a1200;border-radius:50%;width:14px;height:14px;font-size:.55rem;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1}
+/* Toast */
+#hint-toast{position:fixed;bottom:24px;right:24px;max-width:340px;background:#1e1a08;border:1.5px solid var(--warn);border-radius:12px;padding:14px 16px 12px;z-index:200;display:none;box-shadow:0 8px 32px rgba(0,0,0,.6);animation:toast-in .22s ease}
+#hint-toast.visible{display:block}
+@keyframes toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+#hint-toast-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#hint-toast-title{font-size:.72rem;font-weight:700;color:var(--warn);letter-spacing:.04em}
+#hint-toast-counter{font-size:.65rem;color:var(--muted)}
+#hint-toast-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.9rem;padding:0 2px;line-height:1}
+#hint-toast-close:hover{color:var(--text)}
+#hint-toast-text{font-size:.73rem;line-height:1.6;color:#f5d978;font-family:'JetBrains Mono',monospace;white-space:pre-wrap}
+#hint-toast-next{margin-top:10px;background:var(--warn);color:#1a1200;border:none;padding:5px 14px;border-radius:5px;font-size:.72rem;font-weight:700;cursor:pointer;transition:.15s}
+#hint-toast-next:hover{background:#ffd95a}
+#hint-toast-next:disabled{opacity:.35;cursor:not-allowed}
+/* Theory modal */
+#theory-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(6px)}
+#theory-overlay.open{display:flex}
+#theory-box{background:var(--panel);border:1px solid var(--border);border-radius:16px;width:min(780px,96vw);margin:auto;display:flex;flex-direction:column;overflow:hidden}
+#theory-header{background:var(--panel2);padding:16px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:2}
+#theory-header h2{font-size:1rem;flex:1;margin:0}
+#theory-progress-bar{height:4px;background:var(--border);position:relative;overflow:hidden}
+#theory-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--teal));width:0%;transition:width .3s}
+#theory-body{padding:24px 28px;overflow-y:auto;max-height:60vh;scroll-behavior:smooth}
+#theory-body h3{font-size:.95rem;color:var(--teal);margin:22px 0 8px;border-left:3px solid var(--teal);padding-left:10px}
+#theory-body h3:first-child{margin-top:0}
+#theory-body p{font-size:.83rem;line-height:1.7;color:var(--text);margin-bottom:10px}
+#theory-body pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:.74rem;line-height:1.65;color:#a5b4fc;margin:10px 0 14px;overflow-x:auto}
+#theory-body .note{background:rgba(124,106,247,.1);border:1px solid rgba(124,106,247,.3);border-radius:8px;padding:10px 14px;font-size:.79rem;color:#c4b5fd;margin:12px 0}
+#theory-body .warn{background:rgba(247,201,72,.08);border:1px solid rgba(247,201,72,.3);border-radius:8px;padding:10px 14px;font-size:.79rem;color:#fde68a;margin:12px 0}
+#theory-read-indicator{text-align:center;padding:10px;font-size:.72rem;color:var(--muted);border-top:1px solid var(--border)}
+/* Quiz section */
+#theory-quiz{padding:20px 28px;border-top:2px solid var(--border);display:none}
+#theory-quiz h3{font-size:.9rem;color:var(--warn);margin-bottom:16px}
+.quiz-q{margin-bottom:18px}
+.quiz-q p{font-size:.82rem;font-weight:600;margin-bottom:8px;color:var(--text)}
+.quiz-q label{display:flex;align-items:flex-start;gap:8px;font-size:.79rem;color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;transition:.15s;border:1px solid transparent}
+.quiz-q label:hover{background:rgba(124,106,247,.1);border-color:rgba(124,106,247,.3)}
+.quiz-q input[type=radio]{accent-color:var(--accent);margin-top:2px;flex-shrink:0}
+.quiz-q label.correct{background:rgba(82,214,138,.12);border-color:var(--success);color:var(--success)}
+.quiz-q label.wrong{background:rgba(255,107,107,.1);border-color:var(--error);color:var(--error)}
+#quiz-submit{background:var(--accent);color:#fff;border:none;padding:9px 22px;border-radius:8px;font-weight:700;font-size:.82rem;cursor:pointer;margin-top:8px;transition:.15s}
+#quiz-submit:hover{background:#9484ff}
+#quiz-submit:disabled{opacity:.4;cursor:not-allowed}
+#quiz-result{margin-top:14px;padding:12px 16px;border-radius:10px;font-size:.82rem;font-weight:600;display:none}
+#quiz-result.pass{background:rgba(82,214,138,.15);border:1px solid var(--success);color:var(--success)}
+#quiz-result.fail{background:rgba(255,107,107,.1);border:1px solid var(--error);color:var(--error)}
+#btn-theory{background:transparent;border:1px solid var(--teal);color:var(--teal);padding:7px 10px;border-radius:6px;font-size:.75rem;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
+#btn-theory:hover{background:rgba(78,205,196,.12)}
+#btn-theory.done{border-color:var(--success);color:var(--success)}
+/* Particles */
+@keyframes confetti-fall{0%{transform:translateY(0) rotate(0deg) scale(1);opacity:1}80%{opacity:1}100%{transform:translateY(110vh) rotate(1080deg) scale(.5);opacity:0}}
+.conf-piece{position:absolute;pointer-events:none;border-radius:2px;animation:confetti-fall linear forwards}
+#confetti-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:20}
+/* Pick burst */
+@keyframes pick-burst{0%{transform:translate(-50%,-50%) scale(1);opacity:1}100%{transform:translate(calc(-50% + var(--bx)),calc(-50% + var(--by))) scale(0);opacity:0}}
+@keyframes pick-plus{0%{transform:translateX(-50%) translateY(0) scale(1.2);opacity:1}100%{transform:translateX(-50%) translateY(-60px) scale(.8);opacity:0}}
+.pick-dot{position:absolute;pointer-events:none;border-radius:50%;animation:pick-burst .55s cubic-bezier(.2,.8,.4,1) forwards}
+.pick-sq{position:absolute;pointer-events:none;border-radius:3px;animation:pick-burst .55s cubic-bezier(.2,.8,.4,1) forwards}
+.pick-plus{position:absolute;pointer-events:none;font-size:.82rem;font-weight:800;font-family:'JetBrains Mono',monospace;color:#f7c948;text-shadow:0 0 8px #f7c948;animation:pick-plus .75s ease-out forwards;white-space:nowrap}
+</style>
+
+<div id="app">
+  <div id="sidebar">
+    <div id="level-bar">
+      <span id="level-num">1 / 10</span>
+      <span id="level-title">Первый шаг</span>
+      <div id="stars-display"><span class="star" id="s1">⭐</span><span class="star" id="s2">⭐</span><span class="star" id="s3">⭐</span></div>
+    </div>
+    <div id="task-panel"><h4>Задание</h4><div id="task-text"></div></div>
+    <details id="api-hint">
+      <summary>📖 Справка — модуль robot</summary>
+      <pre id="api-ref"></pre>
+    </details>
+    <div id="editor-wrap">
+      <textarea id="code" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+    </div>
+    <div id="controls">
+      <button id="btn-run">▶ Запустить</button>
+      <button id="btn-reset">↺ Сброс</button>
+      <button id="btn-hint" title="Подсказка">💡<span id="hint-badge" style="display:none"></span></button>
+      <button id="btn-theory">📚 Теория</button>
+      <button id="btn-stats">📊</button>
+      <button id="btn-lb" title="Лидерборд">🏆</button>
+      <div id="speed-wrap">⚡<input type="range" id="speed" min="1" max="10" value="5"></div>
+    </div>
+    <div id="output-panel"><div class="out-sys">// вывод программы</div></div>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div id="confetti-layer"></div>
+    <div id="hud">
+      <div class="hud-chip">🤖 <span id="hud-pos">0, 0</span></div>
+      <div class="hud-chip">🧭 <span id="hud-dir">Восток</span></div>
+      <div class="hud-chip">📦 <span id="hud-inv">0</span></div>
+      <div class="hud-chip">🔢 <span id="hud-steps">0 шагов</span></div>
+    </div>
+    <div id="level-picker"></div>
+    <div id="status-banner">
+      <div class="stars-big" id="banner-stars"></div>
+      <h2 id="banner-title"></h2>
+      <p id="banner-msg"></p>
+      <button class="btn-next" id="btn-next">Следующий →</button>
+    </div>
+  </div>
+</div>
+<div id="theory-overlay">
+  <div id="theory-box">
+    <div id="theory-header">
+      <span style="font-size:1.3rem">📚</span>
+      <h2>Управление роботом — основы Python</h2>
+      <button id="btn-close-theory" style="background:none;border:none;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:0 4px">✕</button>
+    </div>
+    <div id="theory-progress-bar"><div id="theory-progress-fill"></div></div>
+    <div id="theory-body">
+
+      <h3>1. Что такое программа</h3>
+      <p>Программа — это последовательность команд, которые компьютер выполняет по порядку сверху вниз. Каждая строка кода — одна инструкция.</p>
+      <pre>from robot import *   # подключаем библиотеку робота
+move()                # команда: двигаться вперёд
+turn_left()           # команда: повернуть налево
+move()                # снова вперёд</pre>
+      <div class="note">Порядок важен: если поменять строки местами, робот пойдёт другим путём.</div>
+
+      <h3>2. Команды движения</h3>
+      <p>Робот понимает четыре команды для перемещения:</p>
+      <pre>move()        # шаг вперёд (в текущем направлении)
+turn_left()   # поворот на 90° влево (против часовой)
+turn_right()  # поворот на 90° вправо (по часовой)
+pick()        # подобрать предмет на текущей клетке</pre>
+      <p><strong>Важно:</strong> <code>move()</code> всегда идёт вперёд — туда куда смотрит робот. Чтобы идти в другую сторону, сначала нужно повернуться.</p>
+      <div class="warn">Если перед роботом стена и вызвать move() — программа остановится с ошибкой.</div>
+
+      <h3>3. Проверка окружения</h3>
+      <p>Робот может «видеть» что находится вокруг:</p>
+      <pre>sense()         # что впереди: 'wall', 'item', 'goal', 'empty'
+sense_right()   # что справа
+sense_left()    # что слева
+sense_here()    # что на текущей клетке: 'item' или 'empty'
+is_at_goal()    # True если робот стоит на цели</pre>
+
+      <h3>4. Циклы — повторение действий</h3>
+      <p>Чтобы не писать одну команду много раз, используют цикл <code>for</code>:</p>
+      <pre># Вместо пяти строк move():
+for i in range(5):
+    move()         # выполнится 5 раз</pre>
+      <p>Цикл <code>while</code> повторяет пока условие истинно:</p>
+      <pre>while sense() != 'wall':
+    move()   # идём вперёд пока нет стены</pre>
+
+      <h3>5. Условия — ветвление</h3>
+      <p>Оператор <code>if</code> позволяет роботу принимать решения:</p>
+      <pre>if sense() == 'wall':
+    turn_right()   # если стена — повернуть
+else:
+    move()         # иначе — идти вперёд</pre>
+      <p>Комбинация цикла и условия — основа «умного» робота:</p>
+      <pre>for _ in range(100):
+    if sense() == 'wall':
+        turn_right()
+    else:
+        move()
+    if is_at_goal():
+        break   # остановиться когда достигли цели</pre>
+
+      <h3>6. Функции — повторяемые блоки</h3>
+      <p>Если один и тот же код нужен в нескольких местах, его выносят в функцию:</p>
+      <pre>def go_right(n):
+    """Идти вправо n шагов"""
+    for i in range(n):
+        move()
+
+def turn_around():
+    """Развернуться на 180°"""
+    turn_right()
+    turn_right()
+
+# Использование:
+go_right(3)
+turn_around()
+go_right(3)</pre>
+      <div class="note">Функция определяется один раз через <code>def</code>, а вызывается сколько угодно раз.</div>
+
+      <h3>7. Текущая позиция</h3>
+      <p>Робот знает где он находится:</p>
+      <pre>get_x()          # X-координата (0 = левый край)
+get_y()          # Y-координата (0 = верхний край)
+get_direction()  # направление: 'N', 'E', 'S', 'W'</pre>
+      <p>Это помогает строить маршруты: например, «иди пока X &lt; 5».</p>
+
+    </div>
+    <div id="theory-read-indicator">📖 Прочитайте лекцию до конца чтобы открылась проверка</div>
+    <div id="theory-quiz">
+      <h3>✅ Проверка знаний — ответьте на вопросы</h3>
+
+      <div class="quiz-q" id="q1">
+        <p>1. Что делает команда <code>turn_left()</code>?</p>
+        <label><input type="radio" name="q1" value="a"> Движется на одну клетку влево</label>
+        <label><input type="radio" name="q1" value="b"> Поворачивает робота на 90° против часовой стрелки</label>
+        <label><input type="radio" name="q1" value="c"> Поворачивает робота на 180°</label>
+        <label><input type="radio" name="q1" value="d"> Подбирает предмет слева</label>
+      </div>
+
+      <div class="quiz-q" id="q2">
+        <p>2. Робот смотрит на Восток. После <code>turn_left()</code> куда он смотрит?</p>
+        <label><input type="radio" name="q2" value="a"> Запад</label>
+        <label><input type="radio" name="q2" value="b"> Юг</label>
+        <label><input type="radio" name="q2" value="c"> Север</label>
+        <label><input type="radio" name="q2" value="d"> Восток</label>
+      </div>
+
+      <div class="quiz-q" id="q3">
+        <p>3. Как сделать чтобы <code>move()</code> выполнилось ровно 7 раз?</p>
+        <label><input type="radio" name="q3" value="a"> <code>move() * 7</code></label>
+        <label><input type="radio" name="q3" value="b"> <code>for i in range(7): move()</code></label>
+        <label><input type="radio" name="q3" value="c"> <code>repeat(7): move()</code></label>
+        <label><input type="radio" name="q3" value="d"> <code>move(7)</code></label>
+      </div>
+
+      <div class="quiz-q" id="q4">
+        <p>4. Что вернёт <code>sense()</code> если впереди стена?</p>
+        <label><input type="radio" name="q4" value="a"> <code>True</code></label>
+        <label><input type="radio" name="q4" value="b"> <code>'block'</code></label>
+        <label><input type="radio" name="q4" value="c"> <code>'wall'</code></label>
+        <label><input type="radio" name="q4" value="d"> <code>False</code></label>
+      </div>
+
+      <div class="quiz-q" id="q5">
+        <p>5. Какая команда подбирает предмет с текущей клетки?</p>
+        <label><input type="radio" name="q5" value="a"> <code>grab()</code></label>
+        <label><input type="radio" name="q5" value="b"> <code>collect()</code></label>
+        <label><input type="radio" name="q5" value="c"> <code>pick()</code></label>
+        <label><input type="radio" name="q5" value="d"> <code>take()</code></label>
+      </div>
+
+      <button id="quiz-submit" disabled>Проверить ответы</button>
+      <div id="quiz-result"></div>
+    </div>
+  </div>
+</div>
+<div id="hint-toast">
+  <div id="hint-toast-header">
+    <span id="hint-toast-title">💡 Подсказка</span>
+    <span id="hint-toast-counter"></span>
+    <button id="hint-toast-close">✕</button>
+  </div>
+  <div id="hint-toast-text"></div>
+  <button id="hint-toast-next">Следующая →</button>
+</div>
+<div id="stats-overlay">
+  <div id="stats-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="font-size:1.1rem;margin:0">📊 Статистика прохождения</h2>
+      <button id="btn-close-stats">✕</button>
+    </div>
+    <table class="stats-table">
+      <thead><tr><th>#</th><th>Раунд</th><th>Звёзды</th><th>Лучший (шагов)</th></tr></thead>
+      <tbody id="stats-table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/skulpt@1.2.0/dist/skulpt-stdlib.js"></script>
+<script>
+'use strict';
+
+// ─── LEVELS ──────────────────────────────────────────────────────────────────
+const LEVELS = [
+{id:1,title:"Первый шаг",
+task:"Доведи робота до цели 🏁. Импортируй библиотеку и вызови <code>move()</code>.",
+grid:`.....
+.....
+.....
+.....
+.....`,size:[5,5],robot:{x:0,y:2,dir:1},goal:{x:4,y:2},
+items:[],req:0,
+starter:`from robot import *
+
+# Робот смотрит на восток
+# Цель: флаг справа
+move()
+move()
+move()
+move()`,
+stars:[(r,s)=>true,(r,s)=>s<=4,(r,s)=>s<=4],
+hints:['Робот смотрит на восток — значит move() двигает его вправо.','Нужно 4 хода до флага. Напиши move() четыре раза.','from robot import *\nmove()\nmove()\nmove()\nmove()']},
+
+{id:2,title:"Повороты",
+task:"Научись поворачивать: <code>turn_left()</code> и <code>turn_right()</code>.",
+grid:`.....
+.....
+.....
+.....
+.....`,size:[5,5],robot:{x:2,y:4,dir:1},goal:{x:2,y:0},
+items:[],req:0,
+starter:`from robot import *
+
+# Цель сверху — нужно повернуть
+turn_left()
+for i in range(4):
+    move()`,
+stars:[(r,s)=>true,(r,s)=>s<=6,(r,s)=>s<=5],
+hints:['Робот стоит внизу (y=4), цель — наверху (y=0). Нужно повернуть вверх.','turn_left() поворачивает на 90° против часовой. Из восток (→) станет север (↑).','from robot import *\nturn_left()\nfor i in range(4):\n    move()']},
+
+{id:3,title:"Цикл",
+task:"Длинный путь — используй <code>for</code> цикл чтобы не повторять код.",
+grid:`........
+........
+........
+........
+........`,size:[8,5],robot:{x:0,y:2,dir:1},goal:{x:7,y:2},
+items:[],req:0,
+starter:`from robot import *
+
+for i in range(7):
+    move()`,
+stars:[(r,s)=>true,(r,s)=>s<=7,(r,s)=>s<=3],
+hints:['Поле 8×5, цель на x=7. Нужно пройти 7 клеток вправо.','Вместо семи move() используй цикл: for i in range(7): move()','from robot import *\nfor i in range(7):\n    move()']},
+
+{id:4,title:"Сбор предметов",
+task:"Собери все 3 предмета 📦 и дойди до цели. <code>pick()</code> — подобрать.",
+grid:`........
+........
+........
+........
+........`,size:[8,5],robot:{x:0,y:4,dir:1},goal:{x:7,y:0},
+items:[{x:2,y:4},{x:4,y:2},{x:6,y:0}],req:3,
+starter:`from robot import *
+
+# Маршрут: (0,4) → (2,4) → pick → ...
+move()
+move()
+pick()
+print("Подобрал 1!")
+# продолжи маршрут...`,
+stars:[(r,s)=>r>=3,(r,s)=>r>=3&&s<=22,(r,s)=>r>=3&&s<=16],
+hints:['Предметы на позициях (2,4), (4,2), (6,0). Иди к каждому и вызови pick().','После pick() нужно изменить направление движения. Используй turn_left() или turn_right().','Маршрут: вправо×2→pick()→повернуть вверх→вправо×2,вверх×2→pick()→вверх×2,вправо×2→pick()→к цели']},
+
+{id:5,title:"Стены",
+task:"Обойди стены 🧱. Используй <code>sense()</code> — что впереди.",
+grid:`........
+...#....
+...#....
+...#....
+........`,size:[8,5],robot:{x:0,y:2,dir:1},goal:{x:7,y:2},
+items:[],req:0,
+starter:`from robot import *
+
+# sense() → 'empty','wall','item','goal'
+# Стена на x=3 (y=1..3). Обходим сверху через y=0
+move()
+move()
+turn_left()
+move()
+move()
+turn_right()
+move()
+move()
+move()
+move()
+move()
+turn_right()
+move()
+move()`,
+stars:[(r,s)=>true,(r,s)=>s<=18,(r,s)=>s<=14],
+hints:['Стена на x=3 (столбец #). Нужно обойти её сверху или снизу.','sense() возвращает "wall" если впереди стена. Можно проверить: if sense() == "wall".','Обход сверху: move()×3 → turn_right() → move() → turn_left() → продолжить → спуститься к цели']},
+
+{id:6,title:"Умный робот",
+task:"Используй условия и <code>sense()</code> для автоматической навигации.",
+grid:`.......
+.#.#.#.
+.......
+.#.#.#.
+.......`,size:[7,5],robot:{x:0,y:0,dir:1},goal:{x:6,y:4},
+items:[],req:0,
+starter:`from robot import *
+
+for _ in range(40):
+    if sense() == 'wall':
+        turn_right()
+    else:
+        move()
+    if is_at_goal():
+        break`,
+stars:[(r,s)=>true,(r,s)=>s<=30,(r,s)=>s<=20],
+hints:['sense() проверяет что впереди. Если стена — поворачивай. Иначе — иди вперёд.','Алгоритм: в цикле if sense()=="wall": turn_right() else: move(). Добавь is_at_goal() для выхода.','for _ in range(40):\n    if sense() == "wall":\n        turn_right()\n    else:\n        move()\n    if is_at_goal(): break']},
+
+{id:7,title:"Змейка",
+task:"Обойди поле змейкой и собери все предметы. Используй <code>get_x()</code>, <code>get_y()</code>.",
+grid:`.........
+.........
+.........
+.........
+.........`,size:[9,5],robot:{x:0,y:0,dir:1},goal:{x:8,y:4},
+items:[{x:1,y:0},{x:3,y:1},{x:5,y:3},{x:7,y:2},{x:8,y:0}],req:5,
+starter:`from robot import *
+
+# Змейка: идём вправо, потом разворот вниз, влево...
+# Подсказка: sense_here() == 'item' → pick()
+print("Начинаю обход...")`,
+stars:[(r,s)=>r>=5,(r,s)=>r>=5&&s<=65,(r,s)=>r>=5&&s<=30],
+hints:['Поле 9×5, предметы в разных рядах. Нужно обойти всё поле "змейкой".','Змейка: иди вправо по ряду, опустись на ряд, иди влево, опустись, и т.д. sense_here()=="item" → pick()','Используй get_y() чтобы знать текущий ряд и менять направление. Цикл по рядам + цикл по столбцам.']},
+
+{id:8,title:"Лабиринт",
+task:"Алгоритм правой руки: всегда поворачивай направо если можно.",
+grid:`.#.#.#.#.
+.#.#.#...
+.....#.#.
+.#.#...#.
+.#.#.#...`,size:[9,5],robot:{x:0,y:0,dir:1},goal:{x:8,y:4},
+items:[],req:0,
+starter:`from robot import *
+
+for _ in range(120):
+    if sense_right() != 'wall':
+        turn_right()
+        move()
+    elif sense() != 'wall':
+        move()
+    elif sense_left() != 'wall':
+        turn_left()
+        move()
+    else:
+        turn_right()
+        turn_right()
+    if is_at_goal():
+        break`,
+stars:[(r,s)=>true,(r,s)=>s<=80,(r,s)=>s<=50],
+hints:['Алгоритм правой руки: сначала пробуй повернуть вправо и идти. Иначе — прямо. Иначе — влево. Иначе — назад.','Код: if sense_right()!="wall": turn_right(); move() elif sense()!="wall": move() elif sense_left()!="wall": turn_left(); move() else: turn_right(); turn_right()','Оберни алгоритм в цикл for _ in range(120) с проверкой is_at_goal() для выхода.']},
+
+{id:9,title:"Функция",
+task:"Напиши функцию <code>go_to(x, y)</code> и используй её для маршрута.",
+grid:`..........
+..........
+..........
+..........
+..........`,size:[10,5],robot:{x:0,y:0,dir:1},goal:{x:9,y:4},
+items:[{x:3,y:0},{x:6,y:2},{x:9,y:0}],req:3,
+starter:`from robot import *
+
+def go_right(n):
+    for _ in range(n):
+        move()
+
+def go_down(n):
+    turn_right()
+    for _ in range(n):
+        move()
+    turn_left()
+
+go_right(3)
+pick()
+# продолжи...`,
+stars:[(r,s)=>r>=3,(r,s)=>r>=3&&s<=40,(r,s)=>r>=3&&s<=25],
+hints:['Предметы на (3,0), (6,2), (9,0). Напиши функции go_right(n) и go_down(n) для удобства.','go_right: n раз move(). go_down: turn_right() → n раз move() → turn_left(). Аналогично go_up и go_left.','Маршрут: вправо×3→pick()→вниз×2,вправо×3→pick()→вверх×2,вправо×3→pick()→вниз×4→к цели (9,4)']},
+
+{id:10,title:"Финал",
+task:"Всё вместе: стены, предметы, функции. Пройди и собери всё!",
+grid:`..#.....#.
+.##..#...#
+...#.#....
+.#...#.##.
+......#...`,size:[10,5],robot:{x:0,y:4,dir:1},goal:{x:9,y:2},
+items:[{x:2,y:4},{x:6,y:2},{x:8,y:1}],req:3,
+starter:`from robot import *
+
+def try_move():
+    if sense() != 'wall':
+        move()
+        return True
+    return False
+
+print("Финальный экзамен!")
+# Напиши свой алгоритм...`,
+stars:[(r,s)=>r>=3,(r,s)=>r>=3&&s<=90,(r,s)=>r>=3&&s<=60],
+hints:['Три предмета разбросаны по лабиринту. Сначала (2,4), потом (6,2) через верхний ряд, потом (8,1). Цель — (9,2).','Из (4,4) поверни на север и иди до (4,0), затем на восток до (6,0), затем на юг до (6,2) — подбери. Дальше на восток к (8,2), север к (8,1) — подбери. Затем юг и восток к (9,2).','Алгоритм правой руки (for i in range(200)) тоже решает этот раунд автоматически.']},
+
+// ─── УРОВНИ 11-17: ПРОДВИНУТЫЕ ──────────────────────────────────────────────
+
+{id:11,title:"Мегазмейка",
+task:"Обойди всё поле 10×7 и собери все 12 предметов. Нужен эффективный алгоритм обхода.",
+grid:`..........
+..........
+..........
+..........
+..........
+..........
+..........`,size:[10,7],robot:{x:0,y:0,dir:1},goal:{x:9,y:6},
+items:[{x:2,y:0},{x:6,y:0},{x:9,y:0},{x:1,y:2},{x:4,y:2},{x:7,y:2},{x:0,y:4},{x:3,y:4},{x:6,y:4},{x:9,y:4},{x:2,y:6},{x:7,y:6}],req:12,
+starter:`from robot import *
+
+# Змейка 10x7: вправо → вниз → влево → вниз → вправо...
+# sense_here() == 'item' → pick()
+# Используй get_y() для определения направления
+
+def sweep_right(n):
+    for _ in range(n):
+        if sense_here() == 'item':
+            pick()
+        move()
+
+# продолжи алгоритм змейки...
+print("Начинаю обход 10x7...")`,
+stars:[(r,s)=>r>=12,(r,s)=>r>=12&&s<=100,(r,s)=>r>=12&&s<=75],
+hints:['Алгоритм змейки: по чётным рядам идём вправо, по нечётным — влево. get_y()%2 даёт чётность.','Функция sweep(n): n раз делай check+move. После ряда: turn_right→move→turn_right (или turn_left).','Шаблон: for row in range(7): sweep(9); if row<6: turn_down_one_row() и менять направление.']},
+
+{id:12,title:"Паутина",
+task:"Сетчатый лабиринт — стены через клетку. Найди путь через паутину до цели.",
+grid:`.#.#.#.#.#.
+...........
+.#.#.#.#.#.
+...........
+.#.#.#.#.#.
+...........
+.#.#.#.#.#.`,size:[11,7],robot:{x:0,y:1,dir:1},goal:{x:10,y:6},
+items:[{x:2,y:1},{x:5,y:1},{x:8,y:3},{x:3,y:5},{x:9,y:5}],req:5,
+starter:`from robot import *
+
+# Стены на нечётных x в чётных рядах
+# Свободные ряды: y=1,3,5 (можно идти прямо)
+
+def navigate():
+    for _ in range(200):
+        if sense() != 'wall':
+            move()
+        elif sense_right() != 'wall':
+            turn_right()
+        elif sense_left() != 'wall':
+            turn_left()
+        else:
+            turn_right(); turn_right()
+        if sense_here() == 'item':
+            pick()
+        if is_at_goal():
+            return
+navigate()`,
+stars:[(r,s)=>r>=5,(r,s)=>r>=5&&s<=80,(r,s)=>r>=5&&s<=55],
+hints:['Сетка: стены на нечётных x в строках y=0,2,4,6. Строки y=1,3,5 полностью открыты.','Заходи в открытый ряд, иди вправо, потом вниз. Меняй ряды через пустые коридоры.','from robot import *\nfor _ in range(200):\n    if sense() != "wall": move()\n    elif sense_right() != "wall": turn_right()\n    elif sense_left() != "wall": turn_left()\n    else: turn_right(); turn_right()\n    if sense_here()=="item": pick()\n    if is_at_goal(): break']},
+
+{id:13,title:"Навигатор",
+task:"Реализуй функцию <code>go_to(tx, ty)</code> которая перемещает робота в любую точку поля.",
+grid:`............
+............
+............
+............
+............
+............`,size:[12,6],robot:{x:0,y:0,dir:1},goal:{x:11,y:5},
+items:[{x:3,y:0},{x:7,y:1},{x:11,y:0},{x:1,y:3},{x:5,y:4},{x:9,y:3},{x:11,y:4}],req:7,
+starter:`from robot import *
+
+def go_right(n):
+    for _ in range(n): move()
+
+def go_left(n):
+    turn_right(); turn_right()
+    for _ in range(n): move()
+    turn_right(); turn_right()
+
+def go_down(n):
+    turn_right()
+    for _ in range(n): move()
+    turn_left()
+
+def go_up(n):
+    turn_left()
+    for _ in range(n): move()
+    turn_right()
+
+def go_to(tx, ty):
+    dx = tx - get_x()
+    dy = ty - get_y()
+    if dx > 0: go_right(dx)
+    elif dx < 0: go_left(-dx)
+    if dy > 0: go_down(dy)
+    elif dy < 0: go_up(-dy)
+
+# Собери предметы используя go_to
+go_to(3, 0); pick()
+# продолжи...`,
+stars:[(r,s)=>r>=7,(r,s)=>r>=7&&s<=70,(r,s)=>r>=7&&s<=50],
+hints:['go_to(tx, ty): сначала выровняй X (иди вправо/влево), потом Y (вниз/вверх).','dx = tx - get_x(); dy = ty - get_y(). Положительный dx → вправо, отрицательный → влево.','Соберй все предметы по порядку: (3,0)→(7,1)→(11,0)→(1,3)→(5,4)→(9,3)→(11,4)→go_to(11,5)']},
+
+{id:14,title:"Лабиринт Pro",
+task:"Большой случайный лабиринт. Алгоритм правой руки не всегда работает — нужна логика.",
+grid:`..#...#..#..
+.#.##.#.##..
+.....#....#.
+.##.##.#..#.
+....#....##.
+.#.##.#.#...
+..#.......#.
+.####.#.##..`,size:[12,8],robot:{x:0,y:7,dir:1},goal:{x:11,y:0},
+items:[{x:3,y:6},{x:7,y:5},{x:8,y:3},{x:5,y:1}],req:4,
+starter:`from robot import *
+
+# Большой лабиринт — нужна умная навигация
+# Алгоритм: попробуй правую руку, но с защитой от тупиков
+
+for _ in range(400):
+    if sense_right() != 'wall':
+        turn_right()
+        move()
+    elif sense() != 'wall':
+        move()
+    elif sense_left() != 'wall':
+        turn_left()
+        move()
+    else:
+        turn_right()
+        turn_right()
+    if sense_here() == 'item':
+        pick()
+    if is_at_goal():
+        break`,
+stars:[(r,s)=>r>=4,(r,s)=>r>=4&&s<=200,(r,s)=>r>=4&&s<=130],
+hints:['Этот лабиринт не всегда решается правой рукой. Попробуй левую руку или комбинацию.','Алгоритм левой руки: сначала turn_left+move если можно, иначе прямо, иначе turn_right.','Попробуй оба алгоритма. Начни с правой руки, если застрял — измени на левую.']},
+
+{id:15,title:"Код Матрицы",
+task:"Реши несколько задач подряд: 3 мини-маршрута, каждый начинается там где закончился предыдущий.",
+grid:`..........#.
+.##.#.##.#..
+....#......#
+.#.##.##.#..
+.#..#..#....
+..#....#.##.
+..........#.
+.###.##.#...`,size:[12,8],robot:{x:0,y:7,dir:1},goal:{x:11,y:0},
+items:[{x:3,y:6},{x:6,y:5},{x:9,y:4},{x:2,y:2},{x:7,y:0},{x:10,y:2},{x:5,y:0}],req:7,
+starter:`from robot import *
+
+# Комплексный раунд: собери все 7 предметов и дойди до цели
+# Нет прямого пути — нужно маневрировать
+
+def smart_move():
+    if sense() != 'wall':
+        move()
+        return True
+    elif sense_right() != 'wall':
+        turn_right(); move()
+        return True
+    elif sense_left() != 'wall':
+        turn_left(); move()
+        return True
+    else:
+        turn_right(); turn_right()
+        return False
+
+for _ in range(500):
+    smart_move()
+    if sense_here() == 'item':
+        pick()
+    if is_at_goal() and items_remaining() == 0:
+        break`,
+stars:[(r,s)=>r>=7,(r,s)=>r>=7&&s<=250,(r,s)=>r>=7&&s<=160],
+hints:['7 предметов в разных частях лабиринта. Нужен полный обход.','smart_move() движется вперёд или поворачивает. Запускай в цикле с pick() после каждого шага.','Добавь условие выхода: is_at_goal() AND items_remaining()==0. Лимит итераций увеличь до 500.']},
+
+{id:16,title:"Хаос",
+task:"Узкие коридоры, много стен. Только функции и чёткая логика помогут пройти.",
+grid:`#.#.#.#.#.#.#
+.............
+#.#.#.#.#.#.#
+.............
+#.#.#.#.#.#.#
+.............
+#.#.#.#.#.#.#
+.............
+#.#.#.#.#.#.#`,size:[13,9],robot:{x:1,y:0,dir:2},goal:{x:11,y:8},
+items:[{x:3,y:0},{x:7,y:0},{x:11,y:0},{x:1,y:2},{x:5,y:2},{x:9,y:2},{x:1,y:4},{x:7,y:4},{x:11,y:4},{x:3,y:6},{x:9,y:6},{x:5,y:8}],req:12,
+starter:`from robot import *
+
+# Сетка 13x9: стены на чётных x в чётных y
+# Открытые коридоры: y=1,3,5,7 и x=1,3,5,7,9,11
+
+def go_corridor(n):
+    """Пройти n шагов по коридору, подбирая предметы"""
+    for _ in range(n):
+        move()
+        if sense_here() == 'item':
+            pick()
+
+# Роботна y=0 смотрит на ЮГ (dir=2)
+# Нужно пройти по вертикальным и горизонтальным коридорам
+print("Начинаю...")`,
+stars:[(r,s)=>r>=12,(r,s)=>r>=12&&s<=120,(r,s)=>r>=12&&s<=90],
+hints:['Стены только на чётных x И чётных y. Открытые ряды y=1,3,5,7 — горизонтальные коридоры.','Вертикальные коридоры: x=1,3,5,7,9,11. Можно двигаться по ним вниз.','Алгоритм: спустись по x=1 до y=8, собирая предметы на y=0,2,4,6,8. Затем пройди по y=8 до x=11.']},
+
+{id:17,title:"Легенда 🔥",
+task:"Финальный вызов: огромный лабиринт 14×9, 8 предметов. Только мастер пройдёт с 3 звёздами.",
+grid:`..#...#...#...
+.#.##.#.##.##.
+......#.....#.
+.##.#####.##..
+......#.......
+.##.#.#.###.#.
+..#...#.....#.
+.#.####.###...
+..............`,size:[14,9],robot:{x:0,y:8,dir:1},goal:{x:13,y:0},
+items:[{x:4,y:6},{x:8,y:6},{x:11,y:4},{x:2,y:4},{x:8,y:2},{x:11,y:2},{x:5,y:1},{x:13,y:3}],req:8,
+starter:`from robot import *
+
+# Легендарный раунд 14x9
+# Нужно собрать все 8 предметов и достичь цели (13,0)
+# Используй комбинацию алгоритмов
+
+def right_hand():
+    if sense_right() != 'wall':
+        turn_right(); move()
+    elif sense() != 'wall':
+        move()
+    elif sense_left() != 'wall':
+        turn_left(); move()
+    else:
+        turn_right(); turn_right()
+
+for _ in range(600):
+    right_hand()
+    if sense_here() == 'item':
+        pick()
+    if is_at_goal() and items_remaining() == 0:
+        break
+
+print("Шагов:", 0)  # заменить на подсчёт`,
+stars:[(r,s)=>r>=8,(r,s)=>r>=8&&s<=350,(r,s)=>r>=8&&s<=220],
+hints:['14×9 лабиринт — самый большой раунд. Алгоритм правой руки с pick() в цикле.','Добавь счётчик шагов и выход по is_at_goal() && items_remaining()==0. Цикл до 600 итераций.','Алгоритм правой руки работает, но медленно. Для 3 звёзд нужна ≤220 шагов — почти оптимальный маршрут.']}
+];
+
+function parseGrid(lvl){
+  const lines=lvl.grid.trim().split('\n');
+  const[W,H]=lvl.size;
+  const cells=[];
+  for(let y=0;y<H;y++){cells[y]=[];const line=lines[y]||'';for(let x=0;x<W;x++)cells[y][x]=line[x]==='#'?1:0;}
+  return cells;
+}
+
+// ─── GAME STATE ───────────────────────────────────────────────────────────────
+let G={lvl:null,cells:null,robot:null,items:null,inventory:0,steps:0,running:false,placed:[]};
+
+function initLevel(lvl){
+  G.lvl=lvl; G.cells=parseGrid(lvl);
+  G.robot={...lvl.robot};
+  G.items=lvl.items.map(i=>({...i,picked:false}));
+  G.placed=[]; G.inventory=0; G.steps=0; G.running=false;
+  clearParticles();
+  buildScene(); updateHUD(); clearOutput();
+  log('// Раунд '+lvl.id+': '+lvl.title,'sys');
+  hideBanner();
+}
+
+// ─── THREE.JS ─────────────────────────────────────────────────────────────────
+let renderer,scene,camera;
+let meshRobot,meshItems=[],meshGoal,meshCells=[];
+// Smooth animation
+let anim=null; // {from:{pos,rot},to:{pos,rot},start,dur,type,resolve}
+
+function easeOutCubic(t){return 1-Math.pow(1-t,3)}
+function easeInOutQuad(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2}
+function lerpAngle(a,b,t){
+  let d=b-a;
+  while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
+  return a+d*t;
+}
+
+function initThree(){
+  const canvas=document.getElementById('three-canvas');
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0f111e);
+  scene.fog=new THREE.Fog(0x0f111e,22,55);
+
+  const wrap=canvas.parentElement;
+  const asp=wrap.clientWidth/wrap.clientHeight,d=6;
+  camera=new THREE.OrthographicCamera(-d*asp,d*asp,d,-d,.1,100);
+  camera.lookAt(0,0,0);
+
+  scene.add(new THREE.AmbientLight(0x7080b0,.8));
+  const sun=new THREE.DirectionalLight(0xfff5e0,1.15);
+  sun.position.set(8,14,6);sun.castShadow=true;
+  sun.shadow.camera.near=.1;sun.shadow.camera.far=100;
+  sun.shadow.camera.left=-14;sun.shadow.camera.right=14;
+  sun.shadow.camera.top=14;sun.shadow.camera.bottom=-14;
+  sun.shadow.mapSize.setScalar(2048);
+  scene.add(sun);
+  const fill=new THREE.DirectionalLight(0x3050ff,.35);fill.position.set(-5,5,-5);scene.add(fill);
+
+  window.addEventListener('resize',onResize);onResize();
+
+  // Mouse orbit (horizontal only, fixed elevation)
+  let orbitAngle=Math.PI/4; // initial 45°
+  let orbitDrag=null;
+  const ORBIT_R=19,ORBIT_Y=13;
+  function setCameraOrbit(){
+    camera.position.set(Math.sin(orbitAngle)*ORBIT_R,ORBIT_Y,Math.cos(orbitAngle)*ORBIT_R);
+    camera.lookAt(0,0,0);camera.updateProjectionMatrix();
+  }
+  setCameraOrbit();
+  window.ORBIT_RESET=()=>{orbitAngle=Math.PI/4;setCameraOrbit();};
+  const cw=document.getElementById('canvas-wrap');
+  cw.addEventListener('mousedown',e=>{orbitDrag={x:e.clientX,angle:orbitAngle};e.preventDefault();});
+  window.addEventListener('mousemove',e=>{
+    if(!orbitDrag)return;
+    const dx=e.clientX-orbitDrag.x;
+    orbitAngle=Math.max(-1.2,Math.min(1.2,orbitDrag.angle-dx*.008));
+    setCameraOrbit();
+  });
+  window.addEventListener('mouseup',()=>{orbitDrag=null;});
+  // Touch support
+  cw.addEventListener('touchstart',e=>{if(e.touches.length===1)orbitDrag={x:e.touches[0].clientX,angle:orbitAngle};},{passive:true});
+  window.addEventListener('touchmove',e=>{
+    if(!orbitDrag||e.touches.length!==1)return;
+    const dx=e.touches[0].clientX-orbitDrag.x;
+    orbitAngle=Math.max(-1.2,Math.min(1.2,orbitDrag.angle-dx*.008));setCameraOrbit();
+  },{passive:true});
+  window.addEventListener('touchend',()=>{orbitDrag=null;});
+
+  requestAnimationFrame(renderLoop);
+}
+
+function onResize(){
+  const wrap=document.getElementById('canvas-wrap');
+  const W=wrap.clientWidth,H=wrap.clientHeight;
+  renderer.setSize(W,H);
+  const asp=W/H,d=6;
+  camera.left=-d*asp;camera.right=d*asp;camera.top=d;camera.bottom=-d;
+  camera.updateProjectionMatrix();
+}
+
+function wp(x,y){
+  const cx=x-(G.lvl.size[0]-1)/2,cy=y-(G.lvl.size[1]-1)/2;
+  return new THREE.Vector3(cx,0,cy);
+}
+
+function buildScene(){
+  meshCells.forEach(m=>scene.remove(m));
+  meshItems.forEach(m=>scene.remove(m));
+  if(meshRobot)scene.remove(meshRobot);
+  if(meshGoal)scene.remove(meshGoal);
+  meshCells=[];meshItems=[];meshRobot=null;meshGoal=null;
+  anim=null;
+
+  const[W,H]=G.lvl.size;
+
+  // Floor + walls
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const p=wp(x,y);
+    if(G.cells[y][x]===1){
+      const m=new THREE.Mesh(new THREE.BoxGeometry(.97,.72,.97),new THREE.MeshLambertMaterial({color:0x1e1848}));
+      m.position.set(p.x,.41,p.z);m.castShadow=true;m.receiveShadow=true;scene.add(m);
+      const cap=new THREE.Mesh(new THREE.BoxGeometry(.97,.05,.97),new THREE.MeshLambertMaterial({color:0x332866}));
+      cap.position.set(p.x,.77,p.z);scene.add(cap);meshCells.push(m,cap);
+    } else {
+      const col=(x+y)%2===0?0x1a1e3a:0x161a34;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(.97,.08,.97),new THREE.MeshLambertMaterial({color:col}));
+      m.position.set(p.x,0,p.z);m.receiveShadow=true;scene.add(m);meshCells.push(m);
+    }
+  }
+
+  // Goal tile
+  {
+    const p=wp(G.lvl.goal.x,G.lvl.goal.y);
+    meshGoal=new THREE.Mesh(new THREE.BoxGeometry(.88,.1,.88),new THREE.MeshLambertMaterial({color:0x52d68a,emissive:0x1a5c3a,emissiveIntensity:.5}));
+    meshGoal.position.set(p.x,.05,p.z);scene.add(meshGoal);
+    // Pole
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,.75,6),new THREE.MeshLambertMaterial({color:0xc8d8f0}));
+    pole.position.set(p.x+.28,.43,p.z-.28);scene.add(pole);
+    const flag=new THREE.Mesh(new THREE.BoxGeometry(.22,.15,.02),new THREE.MeshLambertMaterial({color:0x52d68a,emissive:0x52d68a,emissiveIntensity:.3}));
+    flag.position.set(p.x+.39,.78,p.z-.28);scene.add(flag);
+    meshCells.push(meshGoal,pole,flag);
+  }
+
+  // Items
+  G.items.forEach((item,i)=>{
+    if(item.picked)return;
+    const p=wp(item.x,item.y);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(.28,.28,.28),new THREE.MeshLambertMaterial({color:0xf7c948,emissive:0x7a5800,emissiveIntensity:.55}));
+    m.position.set(p.x,.24,p.z);m.castShadow=true;scene.add(m);m._itemIdx=i;meshItems.push(m);
+  });
+
+  // Robot group
+  meshRobot=new THREE.Group();
+  function rbox(w,h,d,col,emCol,emInt){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:col,emissive:emCol||0,emissiveIntensity:emInt||0}));
+    m.castShadow=true;return m;
+  }
+  // Base block (feet)
+  const base=rbox(.36,.1,.3,0x4a38b0);base.position.y=.05;meshRobot.add(base);
+  // Body
+  const body=rbox(.34,.38,.28,0x7c6af7);body.position.y=.29;meshRobot.add(body);
+  // Chest panel — ON FRONT FACE of body (z offset = body_depth/2 + epsilon)
+  const panel=rbox(.2,.16,.02,0x5a48c8,0x3a2898,.1);panel.position.set(0,.29,.151);meshRobot.add(panel);
+  // Panel detail — teal strip inside panel
+  const pdet=rbox(.14,.04,.021,0x4ecdc4,0x4ecdc4,.4);pdet.position.set(0,.32,.152);meshRobot.add(pdet);
+  // Head
+  const head=rbox(.28,.22,.26,0x9080ff);head.position.y=.59;meshRobot.add(head);
+  // Eyes — on FRONT face of head (z = head_depth/2 = 0.13)
+  const eyeMat=new THREE.MeshLambertMaterial({color:0x4ecdc4,emissive:0x4ecdc4,emissiveIntensity:1.4});
+  [-1,1].forEach(s=>{
+    const e=new THREE.Mesh(new THREE.BoxGeometry(.07,.07,.021),eyeMat);
+    e.position.set(s*.07,.6,.132);meshRobot.add(e);
+  });
+  // Antenna pole
+  const ant=new THREE.Mesh(new THREE.CylinderGeometry(.016,.016,.17,6),new THREE.MeshLambertMaterial({color:0xb0a8f0}));
+  ant.position.set(0,.77,0);meshRobot.add(ant);
+  // Antenna tip — glowing sphere
+  const antTip=new THREE.Mesh(new THREE.SphereGeometry(.038,8,8),new THREE.MeshLambertMaterial({color:0x4ecdc4,emissive:0x4ecdc4,emissiveIntensity:1.2}));
+  antTip.position.set(0,.87,0);meshRobot.add(antTip);
+  // Direction arrow — small flat box on FRONT of body, properly offset
+  const arrow=rbox(.12,.08,.04,0x4ecdc4,0x4ecdc4,.5);arrow.position.set(0,.22,.162);meshRobot.add(arrow);
+  // Legs
+  const legMat=new THREE.MeshLambertMaterial({color:0x5040b8});
+  meshRobot._legL=new THREE.Mesh(new THREE.BoxGeometry(.1,.16,.12),legMat);meshRobot._legL.position.set(-.1,.04,0);meshRobot.add(meshRobot._legL);
+  meshRobot._legR=new THREE.Mesh(new THREE.BoxGeometry(.1,.16,.12),legMat);meshRobot._legR.position.set(.1,.04,0);meshRobot.add(meshRobot._legR);
+
+  scene.add(meshRobot);
+  snapRobot();
+}
+
+const DIR_ANGLE={0:Math.PI,1:Math.PI/2,2:0,3:-Math.PI/2};
+const DIR_NAME={0:'Север',1:'Восток',2:'Юг',3:'Запад'};
+
+function snapRobot(){
+  const p=wp(G.robot.x,G.robot.y);
+  meshRobot.position.set(p.x,.06,p.z);
+  meshRobot.rotation.y=DIR_ANGLE[G.robot.dir];
+}
+
+let _raf=0;
+function renderLoop(ts){
+  requestAnimationFrame(renderLoop);
+  const t=ts/1000;
+
+  // Process smooth animation
+  if(anim){
+    const elapsed=performance.now()-anim.start;
+    const raw=Math.min(elapsed/anim.dur,1);
+    const e=easeOutCubic(raw);
+
+    if(anim.type==='move'){
+      const arcY=Math.sin(raw*Math.PI)*.22;
+      meshRobot.position.lerpVectors(anim.from.pos,anim.to.pos,e);
+      meshRobot.position.y=.06+arcY;
+      // Walking legs
+      const legSwing=Math.sin(raw*Math.PI*2)*.18;
+      if(meshRobot._legL)meshRobot._legL.rotation.x=legSwing;
+      if(meshRobot._legR)meshRobot._legR.rotation.x=-legSwing;
+    } else if(anim.type==='turn'){
+      meshRobot.rotation.y=lerpAngle(anim.from.rot,anim.to.rot,e);
+    } else if(anim.type==='pick'){
+      const sq=1-Math.sin(raw*Math.PI)*.18;
+      meshRobot.scale.y=sq;
+      meshRobot.position.y=.06*(2-sq);
+    } else if(anim.type==='place'){
+      const ex=1+Math.sin(raw*Math.PI)*.12;
+      meshRobot.scale.y=ex;
+    }
+
+    if(raw>=1){
+      // Snap final
+      if(anim.type==='move'){meshRobot.position.copy(anim.to.pos);meshRobot.position.y=.06;}
+      if(anim.type==='turn')meshRobot.rotation.y=anim.to.rot;
+      meshRobot.scale.y=1;
+      if(meshRobot._legL)meshRobot._legL.rotation.x=0;
+      if(meshRobot._legR)meshRobot._legR.rotation.x=0;
+      const r=anim.resolve;anim=null;r();
+    }
+  } else if(meshRobot){
+    // Idle: gentle bob
+    meshRobot.position.y=.06+Math.sin(t*1.8)*.018;
+  }
+
+  // Item float
+  meshItems.forEach((m,i)=>{if(m.parent)m.position.y=.22+Math.sin(t*1.9+i*1.3)*.055;});
+  // Goal pulse
+  if(meshGoal)meshGoal.material.emissiveIntensity=.35+Math.sin(t*2.5)*.2;
+  // Particles
+  if(particles.length)updateParticles(0.016);
+
+  renderer.render(scene,camera);
+}
+
+// ─── ANIMATION HELPERS ────────────────────────────────────────────────────────
+function animDur(){return Math.round(480/parseInt(document.getElementById('speed').value));}
+
+function runAnim(type,from,to){
+  return new Promise(resolve=>{
+    anim={type,from,to,start:performance.now(),dur:animDur(),resolve};
+  });
+}
+
+// ─── GAME LOGIC ───────────────────────────────────────────────────────────────
+const DX=[0,1,0,-1],DY=[-1,0,1,0];
+function inBounds(x,y){return x>=0&&y>=0&&x<G.lvl.size[0]&&y<G.lvl.size[1];}
+function isWall(x,y){if(!inBounds(x,y))return true;return G.cells[y][x]===1;}
+function lookDir(r,offset){
+  const d=(r.dir+offset)%4;const nx=r.x+DX[d],ny=r.y+DY[d];
+  if(!inBounds(nx,ny)||G.cells[ny][nx]===1)return 'wall';
+  if(G.items.some(it=>it.x===nx&&it.y===ny&&!it.picked))return 'item';
+  if(G.lvl.goal.x===nx&&G.lvl.goal.y===ny)return 'goal';
+  return 'empty';
+}
+function hereState(r){
+  if(G.items.some(it=>it.x===r.x&&it.y===r.y&&!it.picked))return 'item';
+  if(G.lvl.goal.x===r.x&&G.lvl.goal.y===r.y)return 'goal';
+  return 'empty';
+}
+
+// ─── PYGRID_API (exposed to robot module via window) ──────────────────────────
+window.PYGRID_API={
+  move(){
+    const r=G.robot;
+    const nx=r.x+DX[r.dir],ny=r.y+DY[r.dir];
+    if(isWall(nx,ny))throw new Sk.builtin.Exception('RobotError: стена впереди ('+r.x+','+r.y+' → '+DIR_NAME[r.dir]+')');
+    const fromPos=meshRobot.position.clone();
+    r.x=nx;r.y=ny;G.steps++;
+    const toP=wp(nx,ny);toP.y=.06;
+    updateHUD();
+    return runAnim('move',{pos:fromPos},{pos:toP});
+  },
+  turn_left(){
+    const fromRot=meshRobot.rotation.y;
+    G.robot.dir=(G.robot.dir+3)%4;G.steps++;updateHUD();
+    return runAnim('turn',{rot:fromRot},{rot:DIR_ANGLE[G.robot.dir]});
+  },
+  turn_right(){
+    const fromRot=meshRobot.rotation.y;
+    G.robot.dir=(G.robot.dir+1)%4;G.steps++;updateHUD();
+    return runAnim('turn',{rot:fromRot},{rot:DIR_ANGLE[G.robot.dir]});
+  },
+  pick(){
+    const r=G.robot;
+    const idx=G.items.findIndex(it=>it.x===r.x&&it.y===r.y&&!it.picked);
+    if(idx===-1)throw new Sk.builtin.Exception('RobotError: нет предмета здесь ('+r.x+','+r.y+')');
+    G.items[idx].picked=true;G.inventory++;G.steps++;
+    const mi=meshItems.findIndex(m=>m._itemIdx===idx);
+    let px=0,pz=0;
+    if(mi>=0){px=meshItems[mi].position.x;pz=meshItems[mi].position.z;scene.remove(meshItems[mi]);meshItems.splice(mi,1);}
+    else{const wp2=wp(r.x,r.y);px=wp2.x;pz=wp2.z;}
+    spawnPickParticles(px,pz);
+    updateHUD();
+    return runAnim('pick',{},{});
+  },
+  place(){
+    if(G.inventory<=0)throw new Sk.builtin.Exception('RobotError: инвентарь пуст');
+    G.inventory--;G.placed.push({x:G.robot.x,y:G.robot.y});G.steps++;
+    const p=wp(G.robot.x,G.robot.y);
+    const m=new THREE.Mesh(new THREE.BoxGeometry(.25,.25,.25),new THREE.MeshLambertMaterial({color:0xf7c948,emissive:0x7a5800,emissiveIntensity:.3}));
+    m.position.set(p.x,.22,p.z);scene.add(m);meshItems.push(m);
+    updateHUD();
+    return runAnim('place',{},{});
+  },
+  sense(){return lookDir(G.robot,0);},
+  sense_left(){return lookDir(G.robot,3);},
+  sense_right(){return lookDir(G.robot,1);},
+  sense_back(){return lookDir(G.robot,2);},
+  sense_here(){return hereState(G.robot);},
+  get_x(){return G.robot.x;},
+  get_y(){return G.robot.y;},
+  get_direction(){return['N','E','S','W'][G.robot.dir];},
+  is_at_goal(){return G.robot.x===G.lvl.goal.x&&G.robot.y===G.lvl.goal.y;},
+  items_collected(){return G.inventory;},
+  items_remaining(){return G.items.filter(i=>!i.picked).length;}
+};
+
+// ─── SKULPT ROBOT MODULE ──────────────────────────────────────────────────────
+// robot.js registered as a Skulpt builtin module
+const ROBOT_MODULE_JS=`
+var $builtinmodule=function(name){
+  var mod={};
+  function sk(fn){return new Sk.builtin.func(fn);}
+  function skStr(s){return new Sk.builtin.str(s);}
+  function skInt(n){return new Sk.builtin.int_(n);}
+  function skBool(b){return b?Sk.builtin.bool.true$:Sk.builtin.bool.false$;}
+  function skNone(){return Sk.builtin.none.none$;}
+  function apiAsync(name){
+    var susp=new Sk.misceval.Suspension();
+    var p=window.PYGRID_API[name]();
+    if(p&&typeof p.then==='function'){
+      susp.data={type:'Sk.promise',promise:p};
+    } else {
+      susp.data={type:'Sk.promise',promise:Promise.resolve()};
+    }
+    susp.resume=function(){return skNone();};
+    return susp;
+  }
+  function apiAsyncErr(name){
+    try{return apiAsync(name);}
+    catch(e){if(e instanceof Sk.builtin.Exception)throw e;throw new Sk.builtin.Exception(e.message||String(e));}
+  }
+  mod.move=sk(function(){return apiAsyncErr('move');});
+  mod.turn_left=sk(function(){return apiAsyncErr('turn_left');});
+  mod.turn_right=sk(function(){return apiAsyncErr('turn_right');});
+  mod.pick=sk(function(){return apiAsyncErr('pick');});
+  mod.place=sk(function(){return apiAsyncErr('place');});
+  mod.sense=sk(function(){return skStr(window.PYGRID_API.sense());});
+  mod.sense_left=sk(function(){return skStr(window.PYGRID_API.sense_left());});
+  mod.sense_right=sk(function(){return skStr(window.PYGRID_API.sense_right());});
+  mod.sense_back=sk(function(){return skStr(window.PYGRID_API.sense_back());});
+  mod.sense_here=sk(function(){return skStr(window.PYGRID_API.sense_here());});
+  mod.get_x=sk(function(){return skInt(window.PYGRID_API.get_x());});
+  mod.get_y=sk(function(){return skInt(window.PYGRID_API.get_y());});
+  mod.get_direction=sk(function(){return skStr(window.PYGRID_API.get_direction());});
+  mod.is_at_goal=sk(function(){return skBool(window.PYGRID_API.is_at_goal());});
+  mod.items_collected=sk(function(){return skInt(window.PYGRID_API.items_collected());});
+  mod.items_remaining=sk(function(){return skInt(window.PYGRID_API.items_remaining());});
+  mod.__all__=new Sk.builtin.list([
+    'move','turn_left','turn_right','pick','place',
+    'sense','sense_left','sense_right','sense_back','sense_here',
+    'get_x','get_y','get_direction','is_at_goal','items_collected','items_remaining'
+  ].map(s=>new Sk.builtin.str(s)));
+  return mod;
+};
+`;
+
+function injectModule(){
+  Sk.builtinFiles['files']['src/lib/robot.js']=ROBOT_MODULE_JS;
+}
+
+// ─── PARTICLES ────────────────────────────────────────────────────────────────
+let particles=[];
+
+function worldToScreen(wx,wy,wz){
+  const v=new THREE.Vector3(wx,wy,wz);
+  v.project(camera);
+  const c=renderer.domElement;
+  return{x:(v.x+1)/2*c.clientWidth, y:(-v.y+1)/2*c.clientHeight};
+}
+
+function spawnPickParticles(wx,wz){
+  const layer=document.getElementById('confetti-layer');
+  const sc=worldToScreen(wx,0.3,wz);
+  const cols=['#f7c948','#ffd95a','#52d68a','#4ecdc4','#ff6b6b','#a5b4fc','#fff'];
+  const N=16;
+  for(let i=0;i<N;i++){
+    const angle=(i/N)*Math.PI*2;
+    const dist=45+Math.random()*35;
+    const bx=Math.cos(angle)*dist+'px';
+    const by=Math.sin(angle)*dist+'px';
+    const col=cols[i%cols.length];
+    const isCircle=i%3!==0;
+    const sz=5+Math.random()*7;
+    const el=document.createElement('div');
+    el.className=isCircle?'pick-dot':'pick-sq';
+    el.style.cssText=`
+      left:${sc.x}px;top:${sc.y}px;
+      width:${sz}px;height:${sz}px;
+      background:${col};
+      box-shadow:0 0 6px ${col};
+      --bx:${bx};--by:${by};
+      animation-delay:${Math.random()*.08}s;
+      animation-duration:${.45+Math.random()*.2}s;
+    `;
+    layer.appendChild(el);
+    el.addEventListener('animationend',()=>el.remove());
+  }
+  // "+1 📦" текст
+  const plus=document.createElement('div');
+  plus.className='pick-plus';
+  plus.textContent='+1 📦';
+  plus.style.cssText=`left:${sc.x}px;top:${sc.y-10}px;`;
+  layer.appendChild(plus);
+  plus.addEventListener('animationend',()=>plus.remove());
+}
+
+function spawnWinEffect(){
+  const layer=document.getElementById('confetti-layer');
+  layer.innerHTML='';
+  const cols=['#f7c948','#7c6af7','#52d68a','#ff6b6b','#4ecdc4','#a5b4fc','#ffd95a','#ff9f43'];
+  const W=layer.offsetWidth||600,H=layer.offsetHeight||400;
+  for(let i=0;i<70;i++){
+    const el=document.createElement('div');
+    el.className='conf-piece';
+    const w=8+Math.random()*10,h=8+Math.random()*10;
+    el.style.cssText=`
+      width:${w}px;height:${h}px;
+      left:${Math.random()*100}%;
+      top:${-20-Math.random()*60}px;
+      background:${cols[i%cols.length]};
+      animation-duration:${1.8+Math.random()*1.4}s;
+      animation-delay:${Math.random()*.6}s;
+    `;
+    layer.appendChild(el);
+    el.addEventListener('animationend',()=>el.remove());
+  }
+  // 3D flash: brief point light burst
+  const flash=new THREE.PointLight(0xffffff,4,12);
+  flash.position.set(0,3,0);scene.add(flash);
+  let ft=0;
+  const fadeFlash=()=>{ft+=.06;flash.intensity=4*(1-ft);if(ft<1)requestAnimationFrame(fadeFlash);else scene.remove(flash);};
+  requestAnimationFrame(fadeFlash);
+}
+
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p._pv.y-=0.003;
+    p.position.x+=p._pv.x;
+    p.position.y+=p._pv.y;
+    p.position.z+=p._pv.z;
+    if(p._prot){p.rotation.x+=p._prot.x;p.rotation.y+=p._prot.y;p.rotation.z+=p._prot.z;}
+    p._plife-=dt*0.7;
+    p.material.opacity=Math.max(0,p._plife);
+    if(p._plife<=0){scene.remove(p);particles.splice(i,1);}
+  }
+}
+
+function clearParticles(){particles.forEach(p=>scene.remove(p));particles=[];}
+
+// ─── THEORY ───────────────────────────────────────────────────────────────────
+const QUIZ_ANSWERS={q1:'b',q2:'c',q3:'b',q4:'c',q5:'c'};
+const PASS_THRESHOLD=0.6; // 60% = 3/5
+const READ_THRESHOLD=0.85; // прочитал 85% лекции
+const MIN_READ_SEC=60;    // минимум 60 секунд на чтение
+
+let theoryState={readPct:0,openedAt:0,quizDone:false};
+
+function loadTheoryDone(){
+  try{return JSON.parse(localStorage.getItem('pygrid2_theory')||'{}');}catch(e){return {};}
+}
+function saveTheoryDone(){
+  try{localStorage.setItem('pygrid2_theory',JSON.stringify({done:true,ts:Date.now()}));}catch(e){}
+}
+
+function openTheory(){
+  theoryState.openedAt=Date.now();
+  theoryState.readPct=0;
+  const overlay=document.getElementById('theory-overlay');
+  overlay.classList.add('open');
+  const body=document.getElementById('theory-body');
+  body.scrollTop=0;
+  document.getElementById('theory-quiz').style.display='none';
+  document.getElementById('quiz-result').style.display='none';
+  document.getElementById('quiz-submit').disabled=true;
+  document.getElementById('theory-read-indicator').textContent='📖 Прочитайте лекцию до конца чтобы открылась проверка';
+  // сбросить radio
+  document.querySelectorAll('#theory-quiz input[type=radio]').forEach(r=>{r.checked=false;r.disabled=false;});
+  document.querySelectorAll('.quiz-q label').forEach(l=>{l.classList.remove('correct','wrong');});
+  updateTheoryProgress(0);
+  body.addEventListener('scroll',onTheoryScroll);
+}
+
+function closeTheory(){
+  document.getElementById('theory-overlay').classList.remove('open');
+  document.getElementById('theory-body').removeEventListener('scroll',onTheoryScroll);
+}
+
+function onTheoryScroll(){
+  const body=document.getElementById('theory-body');
+  const pct=(body.scrollTop+body.clientHeight)/body.scrollHeight;
+  if(pct>theoryState.readPct){
+    theoryState.readPct=pct;
+    updateTheoryProgress(pct);
+    if(pct>=READ_THRESHOLD){
+      const elapsed=(Date.now()-theoryState.openedAt)/1000;
+      if(elapsed>=MIN_READ_SEC){
+        unlockQuiz();
+      } else {
+        const wait=Math.ceil(MIN_READ_SEC-elapsed);
+        document.getElementById('theory-read-indicator').textContent=`⏳ Подождите ещё ${wait} сек…`;
+        setTimeout(()=>{if(theoryState.readPct>=READ_THRESHOLD)unlockQuiz();},wait*1000);
+      }
+    }
+  }
+}
+
+function updateTheoryProgress(pct){
+  document.getElementById('theory-progress-fill').style.width=(pct*100).toFixed(1)+'%';
+}
+
+function unlockQuiz(){
+  document.getElementById('theory-quiz').style.display='block';
+  document.getElementById('theory-read-indicator').textContent='✅ Лекция прочитана — ответьте на вопросы ниже';
+  document.getElementById('theory-quiz').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function submitQuiz(){
+  let correct=0;const total=Object.keys(QUIZ_ANSWERS).length;
+  Object.entries(QUIZ_ANSWERS).forEach(([q,ans])=>{
+    const sel=document.querySelector(`input[name=${q}]:checked`);
+    const qEl=document.getElementById(q);
+    qEl.querySelectorAll('label').forEach(l=>{
+      const v=l.querySelector('input').value;
+      if(v===ans)l.classList.add('correct');
+      else if(sel&&sel.value===v)l.classList.add('wrong');
+      l.querySelector('input').disabled=true;
+    });
+    if(sel&&sel.value===ans)correct++;
+  });
+  document.getElementById('quiz-submit').disabled=true;
+  const pct=correct/total;
+  const res=document.getElementById('quiz-result');
+  res.style.display='block';
+  if(pct>=PASS_THRESHOLD){
+    res.className='pass';
+    res.textContent=`🎉 Отлично! ${correct} из ${total} правильно. Теория зачтена!`;
+    saveTheoryDone();
+    theoryState.quizDone=true;
+    document.getElementById('btn-theory').classList.add('done');
+    document.getElementById('btn-theory').textContent='✅ Теория';
+  } else {
+    res.className='fail';
+    res.textContent=`❌ ${correct} из ${total}. Нужно ${Math.ceil(PASS_THRESHOLD*total)} правильных. Перечитайте и попробуйте снова.`;
+    setTimeout(()=>{
+      document.querySelectorAll('#theory-quiz input[type=radio]').forEach(r=>{r.checked=false;r.disabled=false;});
+      document.querySelectorAll('.quiz-q label').forEach(l=>l.classList.remove('correct','wrong'));
+      document.getElementById('quiz-submit').disabled=false;
+      document.getElementById('quiz-result').style.display='none';
+    },3000);
+  }
+}
+
+function checkQuizReady(){
+  const answered=Object.keys(QUIZ_ANSWERS).every(q=>document.querySelector(`input[name=${q}]:checked`));
+  document.getElementById('quiz-submit').disabled=!answered;
+}
+
+// ─── HINTS (toast) ────────────────────────────────────────────────────────────
+let hintState={shown:0,hints:[]};
+
+function startHintTimer(lvl){
+  hintState={shown:0,hints:lvl.hints||[]};
+  closeHintToast();
+  const btn=document.getElementById('btn-hint');
+  const badge=document.getElementById('hint-badge');
+  if(!hintState.hints.length){btn.disabled=true;badge.style.display='none';return;}
+  btn.disabled=false;
+  badge.textContent=hintState.hints.length;
+  badge.style.display='flex';
+}
+
+function clearHintTimer(){}
+
+function closeHintToast(){
+  document.getElementById('hint-toast').classList.remove('visible');
+}
+
+function showNextHint(){
+  if(!hintState.hints.length)return;
+  if(hintState.shown>=hintState.hints.length)hintState.shown=0;
+  const toast=document.getElementById('hint-toast');
+  document.getElementById('hint-toast-text').textContent=hintState.hints[hintState.shown];
+  hintState.shown++;
+  const left=hintState.hints.length-hintState.shown;
+  document.getElementById('hint-toast-counter').textContent=hintState.shown+' / '+hintState.hints.length;
+  document.getElementById('hint-toast-next').disabled=(hintState.shown>=hintState.hints.length);
+  // update badge
+  const badge=document.getElementById('hint-badge');
+  badge.textContent=left||'✓';
+  toast.classList.remove('visible');
+  requestAnimationFrame(()=>toast.classList.add('visible'));
+}
+
+// ─── RUN CODE ─────────────────────────────────────────────────────────────────
+function runCode(){
+  const code=document.getElementById('code').value;
+  try{localStorage.setItem('pygrid2_code_'+currentLevel,code);}catch(e){}
+
+  if(!code.trim())return;
+  const lvl=G.lvl;
+  initLevel(lvl);
+  document.getElementById('btn-run').disabled=true;
+  document.getElementById('btn-reset').disabled=true;
+  G.running=true;
+  injectModule();
+
+  Sk.configure({
+    output(text){log(text.replace(/\n$/,''),'out');},
+    read(x){
+      if(Sk.builtinFiles&&Sk.builtinFiles['files'][x]!==undefined)return Sk.builtinFiles['files'][x];
+      throw 'File not found: '+x;
+    },
+    __future__:Sk.python3,execLimit:2000000
+  });
+
+  Sk.misceval.asyncToPromise(()=>Sk.importMainWithBody('<stdin>',false,code,true))
+    .then(()=>{G.running=false;enableBtns();checkWin();})
+    .catch(err=>{G.running=false;enableBtns();
+      const msg=err.toString().replace(/^.*?:\s*/,'').replace(/\n.*/,'');
+      log('❌ '+msg,'err');
+      document.getElementById('sidebar').classList.add('shake');
+      setTimeout(()=>document.getElementById('sidebar').classList.remove('shake'),350);
+    });
+}
+
+function enableBtns(){
+  document.getElementById('btn-run').disabled=false;
+  document.getElementById('btn-reset').disabled=false;
+}
+
+function checkWin(){
+  const lvl=G.lvl;
+  const atGoal=G.robot.x===lvl.goal.x&&G.robot.y===lvl.goal.y;
+  const collected=G.items.filter(i=>i.picked).length;
+  if(!atGoal){log('🤖 Не добрался до цели.','sys');return;}
+  if(collected<(lvl.req||0)){log('📦 Собрано '+collected+' из '+lvl.req,'sys');return;}
+  const stars=lvl.stars.map(fn=>fn(collected,G.steps));
+  saveProgress(lvl.id-1,stars);spawnWinEffect();showBanner(stars);
+  log('🏆 Пройдено! Шагов: '+G.steps,'sys');
+}
+
+// ─── PROGRESS ─────────────────────────────────────────────────────────────────
+function loadProg(){try{return JSON.parse(localStorage.getItem('pygrid2')||'[]');}catch(e){return [];}}
+function loadBestSteps(){try{return JSON.parse(localStorage.getItem('pygrid2_steps')||'{}');}catch(e){return {};}}
+function saveProgress(idx,stars){
+  const p=loadProg();const prev=p[idx]||[false,false,false];
+  p[idx]=stars.map((s,i)=>s||prev[i]);
+  try{
+    const sp=loadBestSteps();
+    if(p[idx][0]&&(!sp[idx]||G.steps<sp[idx]))sp[idx]=G.steps;
+    localStorage.setItem('pygrid2_steps',JSON.stringify(sp));
+    localStorage.setItem('pygrid2',JSON.stringify(p));
+  }catch(e){}
+  // Отправляем счёт на сервер (без блокировки)
+  try{
+    const allP=JSON.parse(localStorage.getItem('pygrid2')||'[]');
+    const rounds=allP.filter(s=>s&&s[0]).length;
+    const totalStars=allP.reduce((a,s)=>a+(s?s.filter(Boolean).length:0),0);
+    const sp2=JSON.parse(localStorage.getItem('pygrid2_steps')||'[]');
+    const totalSteps=sp2.reduce((a,v)=>a+(v||0),0);
+    fetch('/api/pygrid/score/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':getCsrf()},
+      body:JSON.stringify({rounds_completed:rounds,stars_total:totalStars,best_steps:totalSteps})}).catch(()=>{});
+  }catch(e){}
+}
+function getCsrf(){
+  const m=document.cookie.match(/csrftoken=([^;]+)/);
+  return m?m[1]:'';
+}
+function showStats(){
+  const prog=loadProg();const sp=loadBestSteps();
+  let rows='';
+  LEVELS.forEach((lvl,i)=>{
+    const s=prog[i]||[false,false,false];
+    const n=s.filter(Boolean).length;
+    const done=s[0];
+    const starText=done?['⭐☆☆','⭐⭐☆','⭐⭐⭐'][n-1]:'—';
+    const starClass=done?(n===3?'st-done':'st-partial'):'st-none';
+    const best=sp[i]?`<span class="st-steps">${sp[i]}</span>`:'—';
+    rows+=`<tr><td>${lvl.id}</td><td>${lvl.title}</td><td class="${starClass}">${starText}</td><td>${best}</td></tr>`;
+  });
+  document.getElementById('stats-table-body').innerHTML=rows;
+  document.getElementById('stats-overlay').classList.add('open');
+}
+
+// ─── UI ───────────────────────────────────────────────────────────────────────
+const DIR_EMOJI={0:'↑',1:'→',2:'↓',3:'←'};
+function updateHUD(){
+  document.getElementById('hud-pos').textContent=G.robot.x+', '+G.robot.y;
+  document.getElementById('hud-dir').textContent=DIR_EMOJI[G.robot.dir]+' '+DIR_NAME[G.robot.dir];
+  document.getElementById('hud-inv').textContent=G.inventory+(G.inventory===1?' предмет':G.inventory<5?' предмета':' предметов');
+  document.getElementById('hud-steps').textContent=G.steps+' шаг'+(G.steps===1?'':G.steps<5?'а':'ов');
+}
+function log(t,type){
+  const el=document.getElementById('output-panel');
+  const d=document.createElement('div');d.className='out-'+(type||'out');d.textContent=t;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+function clearOutput(){document.getElementById('output-panel').innerHTML='';}
+function hideBanner(){document.getElementById('status-banner').style.display='none';}
+function showBanner(stars){
+  const n=stars.filter(Boolean).length;
+  document.getElementById('banner-stars').textContent=stars.map(s=>s?'⭐':'☆').join(' ');
+  document.getElementById('banner-title').textContent=n===3?'🏆 Идеально!':n>=1?'✅ Пройдено!':'✅ Цель!';
+  document.getElementById('banner-msg').textContent=n===3?'Все звёзды! Отличное решение.':'Звёзд: '+n+'/3 — попробуй эффективнее.';
+  document.getElementById('status-banner').style.display='block';
+  ['s1','s2','s3'].forEach((id,i)=>document.getElementById(id).classList.toggle('earned',!!stars[i]));
+  refreshPicker();
+}
+
+const API_REF=`from robot import *
+
+# Движение
+move()             # шаг вперёд
+turn_left()        # поворот налево
+turn_right()       # поворот направо
+
+# Предметы
+pick()             # подобрать здесь
+place()            # положить здесь
+
+# Датчики (возвращают строку)
+sense()            # что впереди?
+sense_left()       # что слева?
+sense_right()      # что справа?
+sense_here()       # что здесь?
+# → 'empty' / 'wall' / 'item' / 'goal'
+
+# Информация
+get_x()            # X позиция
+get_y()            # Y позиция
+get_direction()    # 'N','E','S','W'
+is_at_goal()       # True если на цели
+items_collected()  # кол-во в руках
+items_remaining()  # кол-во на поле
+
+# Тоже работает:
+import robot
+robot.move()`;
+
+let currentLevel=0;
+
+function loadLevelUI(idx){
+  const lvl=LEVELS[idx];
+  document.getElementById('level-num').textContent='Раунд '+lvl.id+' / '+LEVELS.length;
+  document.getElementById('level-title').textContent=lvl.title;
+  document.getElementById('task-text').innerHTML=lvl.task;
+  const _saved=function(){try{return localStorage.getItem('pygrid2_code_'+idx);}catch(e){return null;}}();
+  document.getElementById('code').value=_saved!==null?_saved:(lvl.starter||'');
+  const prog=loadProg();const stars=prog[idx]||[false,false,false];
+  ['s1','s2','s3'].forEach((id,i)=>document.getElementById(id).classList.toggle('earned',!!stars[i]));
+  if(window.ORBIT_RESET)window.ORBIT_RESET();refreshPicker();initLevel(lvl);
+  startHintTimer(lvl);
+}
+
+function refreshPicker(){
+  const prog=loadProg();
+  document.querySelectorAll('.lv-dot').forEach((d,i)=>{
+    d.classList.remove('active','done','locked');
+    if(i===currentLevel)d.classList.add('active');
+    else if(prog[i]&&prog[i][0])d.classList.add('done');
+    else if(i>0&&!(prog[i-1]&&prog[i-1][0]))d.classList.add('locked');
+  });
+}
+
+function buildPicker(){
+  const el=document.getElementById('level-picker');el.innerHTML='';
+  LEVELS.forEach((lvl,i)=>{
+    const d=document.createElement('button');d.className='lv-dot';d.textContent=i+1;d.title=lvl.title;
+    d.addEventListener('click',()=>{
+      if(i>0&&!(loadProg()[i-1]&&loadProg()[i-1][0]))return;
+      currentLevel=i;loadLevelUI(i);
+    });el.appendChild(d);
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('api-ref').textContent=API_REF;
+  initThree();buildPicker();loadLevelUI(0);
+
+  document.getElementById('btn-run').addEventListener('click',runCode);
+  document.getElementById('btn-hint').addEventListener('click',showNextHint);
+  document.getElementById('hint-toast-next').addEventListener('click',showNextHint);
+  document.getElementById('hint-toast-close').addEventListener('click',closeHintToast);
+  document.getElementById('btn-stats').addEventListener('click',showStats);
+  document.getElementById('btn-lb').addEventListener('click',openLeaderboard);
+  document.getElementById('btn-close-stats').addEventListener('click',()=>document.getElementById('stats-overlay').classList.remove('open'));
+  document.getElementById('stats-overlay').addEventListener('click',e=>{if(e.target.id==='stats-overlay')document.getElementById('stats-overlay').classList.remove('open');});
+  // Theory
+  document.getElementById('btn-theory').addEventListener('click',openTheory);
+  document.getElementById('btn-close-theory').addEventListener('click',closeTheory);
+  document.getElementById('theory-overlay').addEventListener('click',e=>{if(e.target.id==='theory-overlay')closeTheory();});
+  document.getElementById('quiz-submit').addEventListener('click',submitQuiz);
+  document.querySelectorAll('#theory-quiz input[type=radio]').forEach(r=>r.addEventListener('change',checkQuizReady));
+  // Restore theory done state
+  if(loadTheoryDone().done){
+    document.getElementById('btn-theory').classList.add('done');
+    document.getElementById('btn-theory').textContent='✅ Теория';
+  }
+  document.getElementById('btn-reset').addEventListener('click',()=>{
+    if(G.running)return;
+    try{localStorage.removeItem('pygrid2_code_'+currentLevel);}catch(e){}
+    initLevel(G.lvl);document.getElementById('code').value=G.lvl.starter||'';
+  });
+  document.getElementById('btn-next').addEventListener('click',()=>{
+    hideBanner();
+    if(currentLevel<LEVELS.length-1){currentLevel++;loadLevelUI(currentLevel);}
+    else{document.getElementById('banner-title').textContent='🎓 Все раунды пройдены!';
+      document.getElementById('banner-msg').textContent='Ты завершил PyGrid!';
+      document.getElementById('btn-next').style.display='none';
+      document.getElementById('status-banner').style.display='block';}
+  });
+  document.getElementById('code').addEventListener('keydown',e=>{
+    if(e.key==='Tab'){e.preventDefault();const s=e.target.selectionStart,end=e.target.selectionEnd;
+      e.target.value=e.target.value.substring(0,s)+'    '+e.target.value.substring(end);
+      e.target.selectionStart=e.target.selectionEnd=s+4;}
+    if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();runCode();}
+  });
+});
+
+// ── Лидерборд ─────────────────────────────────────────────────────
+function openLeaderboard(){
+  const mo=document.getElementById('lb-modal');
+  mo.style.display='flex';
+  const body=document.getElementById('lb-body');
+  body.innerHTML='<tr><td colspan="4" style="text-align:center;padding:1rem;color:#888">Загрузка…</td></tr>';
+  fetch('/api/pygrid/leaderboard/').then(r=>r.json()).then(data=>{
+    if(!data.leaderboard||!data.leaderboard.length){
+      body.innerHTML='<tr><td colspan="4" style="text-align:center;padding:1rem;color:#888">Пока нет данных. Пройди хотя бы один раунд!</td></tr>';
+      return;
+    }
+    body.innerHTML=data.leaderboard.map(r=>`
+      <tr style="${r.is_me?'background:rgba(102,126,234,.12);font-weight:700':''}">
+        <td style="padding:.5rem .75rem;text-align:center">${r.rank<=3?['🥇','🥈','🥉'][r.rank-1]:r.rank}</td>
+        <td style="padding:.5rem .75rem">${r.name}${r.is_me?' (ты)':''}</td>
+        <td style="padding:.5rem .75rem;text-align:center">${r.rounds}</td>
+        <td style="padding:.5rem .75rem;text-align:center">${'⭐'.repeat(Math.min(r.stars,10))}${r.stars>10?'+'+( r.stars-10):''}</td>
+      </tr>`).join('');
+  }).catch(()=>{
+    body.innerHTML='<tr><td colspan="4" style="text-align:center;padding:1rem;color:#f87171">Ошибка загрузки. Войди в аккаунт.</td></tr>';
+  });
+}
+document.getElementById('lb-modal').addEventListener('click',function(e){
+  if(e.target===this) this.style.display='none';
+});
+document.getElementById('lb-close').addEventListener('click',function(){
+  document.getElementById('lb-modal').style.display='none';
+});
+</script>
+
+<div id="lb-modal" style="display:none;position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.6);align-items:center;justify-content:center">
+  <div style="background:#1a1a2e;border:1px solid #334155;border-radius:14px;max-width:520px;width:calc(100%-2rem);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid #334155">
+      <h3 style="margin:0;color:#e2e8f0;font-size:1rem">🏆 Лидерборд PyGrid</h3>
+      <button id="lb-close" style="background:none;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;line-height:1">&#10005;</button>
+    </div>
+    <div style="overflow-y:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse;color:#e2e8f0;font-size:.88rem">
+        <thead><tr style="background:#0f172a">
+          <th style="padding:.5rem .75rem;text-align:center;color:#94a3b8">#</th>
+          <th style="padding:.5rem .75rem;color:#94a3b8">Игрок</th>
+          <th style="padding:.5rem .75rem;text-align:center;color:#94a3b8">Раундов</th>
+          <th style="padding:.5rem .75rem;text-align:center;color:#94a3b8">Звёзды</th>
+        </tr></thead>
+        <tbody id="lb-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>

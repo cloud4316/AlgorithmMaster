@@ -65,8 +65,13 @@ let usedIds = new Set();
 let selectedIds = new Set();
 let currentQ = null;
 let answered_this = false;
-// Сохраняем историю ответов для разбора в конце
 const _history = []; // [{q, chosenIds, isCorrect}]
+const _startTime = Date.now();
+let _focusLoss = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) _focusLoss++;
+});
+window.addEventListener('blur', () => { _focusLoss++; });
 
 const DIFF_NAMES = {1:'Лёгкий', 2:'Средний', 3:'Сложный'};
 const DIFF_CSS   = {1:'diff-1', 2:'diff-2', 3:'diff-3'};
@@ -137,48 +142,61 @@ function confirmAnswer() {
   answered_this = true;
   document.getElementById('confirmBtn').disabled = true;
 
-  const correctSet = new Set(currentQ.correct_ids);
   const chosenNow = new Set(selectedIds);
-  const isCorrect = chosenNow.size === correctSet.size &&
-    [...chosenNow].every(id => correctSet.has(id));
-
-  // Сохраняем для итогового разбора
-  _history.push({ q: currentQ, chosenIds: [...chosenNow], isCorrect });
-
-  // Показываем только ✓/✗ — БЕЗ раскрытия правильного ответа
-  document.querySelectorAll('.choice-btn').forEach(btn => {
-    const id = parseInt(btn.dataset.id);
-    if (chosenNow.has(id)) {
-      btn.classList.add(isCorrect ? 'confirmed-ok' : 'confirmed-fail');
-    }
-    btn.disabled = true;
-  });
-
-  // Короткое feedback-сообщение
-  const expl = document.getElementById('qExplanation');
-  expl.textContent = isCorrect ? '✓ Верно!' : '✗ Неверно — разбор будет в конце';
-  expl.style.display = 'block';
-  expl.className = 'aq-explanation ' + (isCorrect ? 'expl-ok' : 'expl-fail');
-
-  answered++;
-  usedIds.add(currentQ.id);
-
-  if (isCorrect) {
-    correct++;
-    currentDiff = Math.min(3, currentDiff + 1);
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '');
+  if (currentQ.q_type === 'single') {
+    fd.append('choice_id', [...chosenNow][0]);
   } else {
-    currentDiff = Math.max(1, currentDiff - 1);
+    [...chosenNow].forEach(id => fd.append('choice_ids', id));
   }
 
-  updateProgress();
+  // Проверяем ответ на сервере — correct_ids приходят только после ответа
+  fetch('/api/quiz/check-answer/' + currentQ.id + '/', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error && data.is_correct === undefined) {
+        // Сессия истекла — перезагружаем страницу теста
+        alert('Сессия теста истекла. Страница перезагрузится.');
+        window.location.reload();
+        return;
+      }
+      const isCorrect = data.is_correct;
+      const correctSet = new Set(data.correct_ids);
 
-  const isLast = answered >= TOTAL || usedIds.size >= ALL_Q.length;
-  const nextBtn = document.getElementById('nextBtn');
-  if (isLast) {
-    nextBtn.textContent = 'Посмотреть результат';
-    nextBtn.onclick = showResult;
-  }
-  nextBtn.style.display = 'inline-block';
+      _history.push({ q: currentQ, chosenIds: [...chosenNow], isCorrect, correct_ids: data.correct_ids, explanation: data.explanation });
+
+      document.querySelectorAll('.choice-btn').forEach(btn => {
+        const id = parseInt(btn.dataset.id);
+        if (chosenNow.has(id)) {
+          btn.classList.add(isCorrect ? 'confirmed-ok' : 'confirmed-fail');
+        }
+        if (!isCorrect && correctSet.has(id)) {
+          btn.classList.add('confirmed-ok');
+        }
+        btn.disabled = true;
+      });
+
+      const expl = document.getElementById('qExplanation');
+      expl.textContent = isCorrect ? '✓ Верно!' : ('✗ Неверно' + (data.explanation ? ': ' + data.explanation : ' — разбор будет в конце'));
+      expl.style.display = 'block';
+      expl.className = 'aq-explanation ' + (isCorrect ? 'expl-ok' : 'expl-fail');
+
+      answered++;
+      usedIds.add(currentQ.id);
+      if (isCorrect) { correct++; currentDiff = Math.min(3, currentDiff + 1); }
+      else { currentDiff = Math.max(1, currentDiff - 1); }
+      updateProgress();
+
+      const isLast = answered >= TOTAL || usedIds.size >= ALL_Q.length;
+      const nextBtn = document.getElementById('nextBtn');
+      if (isLast) { nextBtn.textContent = 'Посмотреть результат'; nextBtn.onclick = showResult; }
+      nextBtn.style.display = 'inline-block';
+    })
+    .catch(() => {
+      answered_this = false;
+      document.getElementById('confirmBtn').disabled = false;
+    });
 }
 
 function nextQuestion() {
@@ -215,11 +233,32 @@ function showResult() {
   document.getElementById('statCorrect').textContent = correct;
   document.getElementById('statTotal').textContent = TOTAL;
   document.getElementById('statPct').textContent = pct + '%';
-  // Если нет ошибок — скрываем кнопку разбора
   const errors = TOTAL - correct;
   const rb = document.getElementById('reviewToggleBtn');
   if (errors === 0) { rb.textContent = '✅ Посмотреть разбор'; }
   else { rb.textContent = '🔍 Разбор ошибок (' + errors + ')'; }
+
+  // Сохраняем результат на сервер и заменяем URL (back не вернёт к вопросам)
+  const formData = new FormData();
+  formData.append('csrfmiddlewaretoken', (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '');
+  formData.append('time_spent_seconds', Math.round((Date.now() - _startTime) / 1000));
+  formData.append('focus_loss_count', _focusLoss);
+  // Эмулируем ответы в формате submit_quiz: q_{id} = chosen_id
+  _history.forEach(entry => {
+    entry.chosenIds.forEach(cid => {
+      formData.append('q_' + entry.q.id, cid);
+    });
+  });
+  formData.append('_ajax', '1');
+  fetch('{% url "submit_quiz" quiz.id %}', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(data => {
+      if (data.redirect) { window.location.replace(data.redirect); }
+      else if (data.error) { alert(data.error); }
+    })
+    .catch(() => {});
+  // Заменяем history entry чтобы back не возвращал к вопросам
+  history.replaceState({ quizDone: true }, '', window.location.href);
 }
 
 let _reviewShown = false;
@@ -233,7 +272,7 @@ function toggleReview() {
   _history.forEach((entry, idx) => {
     const { q, chosenIds, isCorrect } = entry;
     const chosen = new Set(chosenIds);
-    const correct_ids = new Set(q.correct_ids);
+    const correct_ids = new Set(entry.correct_ids || []);
 
     const card = document.createElement('div');
     card.className = 'aq-rev-card ' + (isCorrect ? 'rev-ok' : 'rev-fail');
@@ -250,8 +289,9 @@ function toggleReview() {
     }).join('');
 
     let expHtml = '';
-    if (!isCorrect && q.explanation) {
-      expHtml = `<div class="rev-exp">💡 ${q.explanation}</div>`;
+    const explanation = entry.explanation || q.explanation || '';
+    if (!isCorrect && explanation) {
+      expHtml = `<div class="rev-exp">💡 ${explanation}</div>`;
     }
 
     card.innerHTML = `
@@ -344,11 +384,11 @@ if (first) renderQuestion(first); else showResult();
 .aq-stat small{font-size:.8rem;color:#6b7280}
 .aq-result-actions{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
 .aq-btn-outline{background:transparent;color:#667eea;border:1.5px solid #667eea;padding:.7rem 1.75rem;border-radius:10px;font-size:.95rem;font-weight:600;text-decoration:none;display:inline-block}
-body.dark-mode .aq-card,.aq-result{background:#1e293b;border-color:#334155}
-body.dark-mode .aq-q-text{color:#f1f5f9}
-body.dark-mode .choice-btn{background:#0f172a;border-color:#334155;color:#e2e8f0}
-body.dark-mode .choice-btn:hover:not(:disabled){background:#1e3a5f;border-color:#667eea}
-body.dark-mode .choice-btn.selected{background:#2d1b69;border-color:#818cf8}
-body.dark-mode .aq-progress-bar-wrap{background:#334155}
+body.dark-mode .aq-card,body.dark-mode .aq-result{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .aq-q-text{color:#f5f5f7}
+body.dark-mode .choice-btn{background:#000000;border-color:rgba(255,255,255,.1);color:#f5f5f7}
+body.dark-mode .choice-btn:hover:not(:disabled){background:rgba(59,130,246,.15);border-color:#667eea}
+body.dark-mode .choice-btn.selected{background:rgba(99,102,241,.2);border-color:#818cf8}
+body.dark-mode .aq-progress-bar-wrap{background:rgba(255,255,255,.1)}
 </style>
 {% endblock %}

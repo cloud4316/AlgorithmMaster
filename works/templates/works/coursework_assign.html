@@ -1,0 +1,109 @@
+{% extends 'works/base.html' %}
+{% block title %}{% if cw %}Редактировать курсовую{% else %}Назначить курсовую{% endif %}{% endblock %}
+{% block content %}
+<div style="max-width:640px;margin:2rem auto;padding:0 1rem">
+
+  <a href="{% url 'coursework_list' %}" style="display:inline-flex;align-items:center;gap:.4rem;color:#667eea;text-decoration:none;font-size:.9rem;font-weight:600;margin-bottom:1.25rem">
+    <i class="fas fa-arrow-left"></i> Назад к списку
+  </a>
+
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:1.25rem 1.5rem;color:#fff">
+      <h1 style="font-size:1.2rem;font-weight:700;margin:0">
+        <i class="fas fa-graduation-cap"></i>
+        {% if cw %}Редактировать курсовую{% else %}Назначить курсовую работу{% endif %}
+      </h1>
+    </div>
+
+    <form method="post" style="padding:1.5rem">
+      {% csrf_token %}
+
+      <!-- Студент -->
+      <div style="margin-bottom:1.1rem">
+        <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Студент *</label>
+        <select name="student_id" required style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem">
+          <option value="">— выберите студента —</option>
+          {% for u in students %}
+          <option value="{{ u.id }}" {% if cw and cw.student_id == u.id %}selected{% elif request.GET.student == u.id|stringformat:"s" %}selected{% endif %}>
+            {{ u.last_name }} {{ u.first_name }} (@{{ u.username }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Предмет -->
+      <div style="margin-bottom:1.1rem">
+        <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Предмет</label>
+        <select name="subject_id" style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem">
+          <option value="">— без предмета —</option>
+          {% for s in subjects %}
+          <option value="{{ s.id }}" {% if cw and cw.subject_id == s.id %}selected{% endif %}>{{ s.title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Тема -->
+      <div style="margin-bottom:1.1rem">
+        <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Тема курсовой *</label>
+        <input type="text" name="title" required maxlength="300"
+               value="{% if cw %}{{ cw.title }}{% endif %}"
+               placeholder="Например: Разработка микроконтроллерного устройства управления"
+               style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;box-sizing:border-box">
+      </div>
+
+      <!-- Описание -->
+      <div style="margin-bottom:1.1rem">
+        <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Описание / задание</label>
+        <textarea name="description" rows="4"
+                  placeholder="Дополнительные требования, задание, цели..."
+                  style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;resize:vertical;box-sizing:border-box">{% if cw %}{{ cw.description }}{% endif %}</textarea>
+      </div>
+
+      <!-- Статус + срок -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.1rem">
+        <div>
+          <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Статус</label>
+          <select name="status" style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem">
+            <option value="assigned"     {% if not cw or cw.status == 'assigned' %}selected{% endif %}>Назначена</option>
+            <option value="in_progress"  {% if cw and cw.status == 'in_progress' %}selected{% endif %}>Выполняется</option>
+            <option value="submitted"    {% if cw and cw.status == 'submitted' %}selected{% endif %}>Сдана на проверку</option>
+            <option value="defended"     {% if cw and cw.status == 'defended' %}selected{% endif %}>Защищена</option>
+            <option value="rejected"     {% if cw and cw.status == 'rejected' %}selected{% endif %}>На доработку</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Срок сдачи</label>
+          <input type="date" name="deadline"
+                 value="{% if cw and cw.deadline %}{{ cw.deadline|date:'Y-m-d' }}{% endif %}"
+                 style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;box-sizing:border-box">
+        </div>
+      </div>
+
+      <!-- Заметка преподавателя + оценка -->
+      <div style="display:grid;grid-template-columns:1fr 100px;gap:1rem;margin-bottom:1.5rem">
+        <div>
+          <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Заметка для студента</label>
+          <textarea name="teacher_note" rows="2"
+                    placeholder="Комментарий, замечания..."
+                    style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;resize:vertical;box-sizing:border-box">{% if cw %}{{ cw.teacher_note }}{% endif %}</textarea>
+        </div>
+        <div>
+          <label style="display:block;font-size:.85rem;font-weight:600;color:#374151;margin-bottom:.4rem">Оценка</label>
+          <input type="number" name="grade" min="1" max="5"
+                 value="{% if cw and cw.grade %}{{ cw.grade }}{% endif %}"
+                 placeholder="1-5"
+                 style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:.75rem;justify-content:flex-end">
+        <a href="{% url 'coursework_list' %}" style="padding:.6rem 1.1rem;border:1px solid #d1d5db;border-radius:8px;color:#374151;text-decoration:none;font-size:.9rem">Отмена</a>
+        <button type="submit" style="background:#667eea;color:#fff;border:none;padding:.6rem 1.4rem;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer">
+          {% if cw %}Сохранить{% else %}Назначить{% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

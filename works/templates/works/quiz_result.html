@@ -27,6 +27,7 @@
   <!-- ── Кнопки действий ── -->
   <div class="result-actions-top">
     <a href="{% url 'quiz_detail' quiz.id %}" class="btn btn-outline">🔄 Пройти ещё раз</a>
+    <a href="{% url 'quiz_history' quiz.id %}" class="btn btn-outline">📜 История попыток</a>
     <a href="{% url 'quiz_list' %}" class="btn btn-outline">📋 Все тесты</a>
     {% if quiz.module %}<a href="{% url 'theory_list' %}" class="btn btn-outline">📖 К теории</a>{% endif %}
     {% if errors > 0 %}
@@ -55,7 +56,7 @@
       <div class="choices-wrap">
         {% for choice in question.choices.all %}
         <div class="choice-item" id="rc_{{ question.id }}_{{ choice.id }}"
-             data-qid="{{ question.id }}" data-cid="{{ choice.id }}" data-correct="{{ choice.is_correct|lower }}">
+             data-qid="{{ question.id }}" data-cid="{{ choice.id }}">
           <span class="ci-icon">○</span>
           <span class="ci-text">{{ choice.text }}</span>
           <span class="ci-tag" style="display:none"></span>
@@ -94,33 +95,39 @@ function showReview() {
     }
 
     const chosen = new Set(data.chosen || []);
-    const correct = new Set(data.correct || []);
+    // correct_ids приходят только для ошибочных ответов (сервер их не отдаёт для правильных)
+    const correctSet = new Set(data.correct || []);
 
     // Помечаем каждый вариант
     card.querySelectorAll('.choice-item').forEach(el => {
       const cid = parseInt(el.dataset.cid);
-      const isCorrect = el.dataset.correct === 'true';
       const wasChosen = chosen.has(cid);
+      const isRight = correctSet.has(cid);
       const tag = el.querySelector('.ci-tag');
       const icon = el.querySelector('.ci-icon');
 
-      if (wasChosen && isCorrect) {
-        // Выбрал правильно
+      if (data.is_correct && wasChosen) {
+        // Вопрос решён верно — подсвечиваем только выбранный вариант
         el.classList.add('chosen-correct');
         icon.textContent = '✓';
         tag.textContent = 'Твой ответ · верно';
         tag.style.display = 'inline';
         tag.style.color = '#059669';
-      } else if (wasChosen && !isCorrect) {
-        // Выбрал неправильно
-        el.classList.add('chosen-wrong');
-        icon.textContent = '✗';
-        tag.textContent = 'Твой ответ · неверно';
-        tag.style.display = 'inline';
-        tag.style.color = '#dc2626';
-      } else if (!wasChosen && isCorrect) {
-        // Правильный, но не выбрал (только для неверных вопросов показываем)
-        if (!data.is_correct) {
+      } else if (!data.is_correct) {
+        if (wasChosen && !isRight) {
+          el.classList.add('chosen-wrong');
+          icon.textContent = '✗';
+          tag.textContent = 'Твой ответ · неверно';
+          tag.style.display = 'inline';
+          tag.style.color = '#dc2626';
+        } else if (wasChosen && isRight) {
+          el.classList.add('chosen-correct');
+          icon.textContent = '✓';
+          tag.textContent = 'Твой ответ · верно';
+          tag.style.display = 'inline';
+          tag.style.color = '#059669';
+        } else if (!wasChosen && isRight) {
+          // Правильный ответ которого студент не выбрал — показываем только при ошибке
           el.classList.add('is-correct');
           icon.textContent = '✓';
           tag.textContent = 'Правильный ответ';
@@ -197,5 +204,19 @@ function showReview() {
 .choice-item.is-correct{background:#ecfdf5;border-color:#6ee7b7;border-style:dashed}
 .choice-item.is-correct .ci-icon{color:#059669}
 .explanation{background:#fffbeb;border-left:4px solid #f59e0b;padding:.65rem .95rem;border-radius:0 8px 8px 0;font-size:.85rem;color:#92400e;margin-top:.25rem}
+/* dark mode */
+body.dark-mode .btn-outline{background:#1c1c1e;border-color:rgba(255,255,255,.1);color:#a5b4fc}
+body.dark-mode .btn-outline:hover{background:rgba(99,102,241,.12);border-color:#667eea}
+body.dark-mode .review-card{background:#1c1c1e;border-color:rgba(255,255,255,.1);color:#f5f5f7}
+body.dark-mode .review-card.correct{background:#022c22;border-color:#10b981}
+body.dark-mode .review-card.wrong{background:#1c0707;border-color:#ef4444}
+body.dark-mode .q-text{color:#f5f5f7}
+body.dark-mode .choice-item{background:#000000;color:#f5f5f7}
+body.dark-mode .choice-item.chosen-correct{background:#022c22;border-color:#10b981}
+body.dark-mode .choice-item.chosen-wrong{background:#1c0707;border-color:#ef4444}
+body.dark-mode .choice-item.is-correct{background:#022c22;border-color:#6ee7b7}
+body.dark-mode .review-title{color:#f5f5f7}
+body.dark-mode .explanation{background:#1c1403;color:#fbbf24;border-left-color:#f59e0b}
+body.dark-mode .q-num{background:#2c2c2e;color:#f5f5f7}
 </style>
 {% endblock %}

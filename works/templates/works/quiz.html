@@ -1,6 +1,13 @@
 {% extends 'works/base.html' %}
 {% block title %}{{ quiz.title }}{% endblock %}
 {% block content %}
+{% if not request.user.is_staff %}
+<div id="sec-overlay"><span>🔒 Вернитесь на вкладку чтобы продолжить</span></div>
+<div class="sec-warning-bar">
+  <i class="fas fa-shield-alt"></i>
+  Снятие скриншотов и копирование материалов запрещено. Все действия на странице фиксируются и передаются администрации.
+</div>
+{% endif %}
 <div class="quiz-page">
   <div class="quiz-header">
     <a href="{% url 'quiz_list' %}" class="back-link"><i class="fas fa-arrow-left"></i> Все тесты</a>
@@ -9,16 +16,28 @@
     <div class="quiz-info-row">
       <span><i class="fas fa-question-circle"></i> {{ questions|length }} вопросов</span>
       <span><i class="fas fa-award"></i> Проходной балл: {{ quiz.pass_score }}%</span>
+      {% if quiz.time_limit %}<span><i class="fas fa-clock"></i> Лимит: {{ quiz.time_limit }} мин</span>{% endif %}
       {% if best_attempt %}
       <span class="best {% if best_attempt.passed %}pass{% else %}fail{% endif %}">
         <i class="fas fa-history"></i> Лучший результат: {{ best_attempt.score }}%
       </span>
+      <a href="{% url 'quiz_history' quiz.id %}" class="hist-link"><i class="fas fa-list-alt"></i> История попыток</a>
       {% endif %}
     </div>
   </div>
 
+  {% if quiz.time_limit %}
+  <div class="exam-timer" id="examTimer">
+    <i class="fas fa-stopwatch"></i>
+    <span id="timerDisplay">{{ quiz.time_limit }}:00</span>
+    <span class="timer-label">осталось</span>
+  </div>
+  {% endif %}
+
   <form method="post" action="{% url 'submit_quiz' quiz.id %}" class="quiz-form">
     {% csrf_token %}
+    <input type="hidden" name="time_spent_seconds" id="timeSpentInput" value="0">
+    <input type="hidden" name="focus_loss_count" id="focusLossInput" value="0">
     {% for question in questions %}
     <div class="question-card" id="q{{ forloop.counter }}">
       <div class="question-header">
@@ -30,7 +49,7 @@
       <pre class="q-code"><code>{{ question.code_snippet }}</code></pre>
       {% endif %}
       <div class="choices-list">
-        {% for choice in question.choices.all %}
+        {% for choice in question.shuffled_choices %}
         <label class="choice-label">
           {% if question.q_type == 'multiple' %}
           <input type="checkbox" name="q_{{ question.id }}" value="{{ choice.id }}">
@@ -81,15 +100,99 @@ document.querySelectorAll('input[type=radio], input[type=checkbox]').forEach(inp
   });
 });
 
+{% if not request.user.is_staff %}
+// Запрет копирования + белый экран при потере фокуса
+(function(){
+  var ov=document.getElementById('sec-overlay');
+  function show(){if(ov)ov.classList.add('active')}
+  function hide(){if(ov)ov.classList.remove('active')}
+  document.addEventListener('visibilitychange',function(){document.hidden?show():hide();});
+  window.addEventListener('blur',show);
+  window.addEventListener('focus',hide);
+  document.addEventListener('keydown',function(e){
+    var key=e.key||'';
+    if(key==='PrintScreen'||(e.shiftKey&&key.toLowerCase()==='s')){
+      show();setTimeout(hide,3000);
+    }
+    if((e.ctrlKey||e.metaKey)&&key.toLowerCase()==='p'){
+      e.preventDefault();show();setTimeout(hide,2000);
+    }
+  });
+  ['copy','cut','contextmenu'].forEach(function(ev){
+    document.addEventListener(ev,function(e){
+      if(e.target.closest('.quiz-page')){e.preventDefault();return false;}
+    });
+  });
+})();
+{% endif %}
+
+// Трекер времени и детектор потери фокуса
+(function() {
+  const startedAt = Date.now();
+  const form = document.querySelector('.quiz-form');
+  const timeInput = document.getElementById('timeSpentInput');
+  const focusInput = document.getElementById('focusLossInput');
+  let focusLoss = 0;
+  document.addEventListener('visibilitychange', () => { if (document.hidden) focusLoss++; });
+  window.addEventListener('blur', () => { focusLoss++; });
+  form.addEventListener('submit', function() {
+    timeInput.value = Math.round((Date.now() - startedAt) / 1000);
+    focusInput.value = focusLoss;
+  });
+})();
+
 // Предупреждение при попытке уйти со страницы
 let submitted = false;
 document.querySelector('.quiz-form').addEventListener('submit', () => { submitted = true; });
 window.addEventListener('beforeunload', e => {
   if (!submitted) { e.preventDefault(); e.returnValue = ''; }
 });
+
+// Таймер (только если задан лимит)
+{% if quiz.time_limit %}
+(function() {
+  const KEY = 'quiz_timer_{{ quiz.id }}';
+  const LIMIT = {{ quiz.time_limit }} * 60;
+  let startedAt = parseInt(sessionStorage.getItem(KEY) || '0');
+  if (!startedAt) { startedAt = Math.floor(Date.now() / 1000); sessionStorage.setItem(KEY, startedAt); }
+
+  const display = document.getElementById('timerDisplay');
+  const timerEl = document.getElementById('examTimer');
+  const form = document.querySelector('.quiz-form');
+
+  function tick() {
+    const elapsed = Math.floor(Date.now() / 1000) - startedAt;
+    const remaining = LIMIT - elapsed;
+    if (remaining <= 0) {
+      display.textContent = '0:00';
+      timerEl.classList.add('timer-expired');
+      sessionStorage.removeItem(KEY);
+      submitted = true;
+      form.submit();
+      return;
+    }
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    display.textContent = m + ':' + String(s).padStart(2, '0');
+    if (remaining <= 60) timerEl.classList.add('timer-warning');
+    else timerEl.classList.remove('timer-warning');
+    setTimeout(tick, 1000);
+  }
+  tick();
+})();
+{% endif %}
 </script>
 
 <style>
+{% if not request.user.is_staff %}
+#sec-overlay{display:none;position:fixed;inset:0;background:#fff;z-index:99999;align-items:center;justify-content:center}
+#sec-overlay.active{display:flex}
+#sec-overlay span{font-size:1rem;color:#6b7280}
+.sec-warning-bar{background:#fef3c7;border-bottom:1px solid #fbbf24;color:#92400e;font-size:.8rem;padding:.4rem 1rem;text-align:center}
+.sec-warning-bar i{margin-right:.35rem}
+@media print{body{display:none!important}}
+.quiz-page{user-select:none;-webkit-user-select:none}
+{% endif %}
 .quiz-page{max-width:800px;margin:0 auto;padding:2rem 1rem}
 .quiz-header{margin-bottom:2rem}
 .back-link{display:inline-flex;align-items:center;gap:.5rem;color:#667eea;text-decoration:none;font-size:.85rem;margin-bottom:1rem}
@@ -118,5 +221,32 @@ window.addEventListener('beforeunload', e => {
 .btn-submit-quiz:hover{background:#5a67d8}
 .btn-adaptive-quiz{display:inline-flex;align-items:center;gap:.5rem;padding:.7rem 1.25rem;border-radius:8px;background:#f0fdf4;color:#065f46;border:1.5px solid #6ee7b7;font-size:.9rem;font-weight:600;text-decoration:none}
 .btn-adaptive-quiz:hover{background:#d1fae5}
+.hist-link{font-size:.8rem;color:#667eea;text-decoration:none;display:inline-flex;align-items:center;gap:.3rem}
+.hist-link:hover{text-decoration:underline}
+.exam-timer{
+  position:fixed;top:70px;right:1.5rem;
+  background:#1e293b;color:#e2e8f0;
+  border:2px solid #334155;border-radius:12px;
+  padding:.65rem 1.1rem;display:flex;align-items:center;gap:.6rem;
+  font-size:1.15rem;font-weight:700;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,.3);
+}
+.exam-timer i{color:#667eea;font-size:1rem}
+.timer-label{font-size:.75rem;font-weight:400;color:#94a3b8}
+.exam-timer.timer-warning{border-color:#f59e0b;color:#fbbf24}
+.exam-timer.timer-warning i{color:#f59e0b}
+.exam-timer.timer-expired{border-color:#dc2626;color:#f87171}
+/* dark mode */
+body.dark-mode .question-card{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .question-text{color:#f5f5f7}
+body.dark-mode .q-type-badge{background:#000000;color:#98989d}
+body.dark-mode .choice-label{border-color:rgba(255,255,255,.1);color:#f5f5f7}
+body.dark-mode .choice-label:hover{border-color:#6366f1;background:rgba(99,102,241,.12)}
+body.dark-mode .choice-label.selected{border-color:#667eea;background:rgba(99,102,241,.15)}
+body.dark-mode .quiz-submit-row{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .progress-indicator{color:#98989d}
+body.dark-mode .quiz-module{color:#98989d}
+body.dark-mode .quiz-info-row{color:#98989d}
+body.dark-mode .btn-adaptive-quiz{background:#022c22;color:#6ee7b7;border-color:#065f46}
+body.dark-mode .btn-adaptive-quiz:hover{background:#064e3b}
 </style>
 {% endblock %}

@@ -4,7 +4,7 @@
 {% block title %}Профиль{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'works/css/profile.css' %}">
+<link rel="stylesheet" href="{% static 'works/css/profile.css' %}?v=2">
 <style>
 .achievements-section{margin-top:2rem;padding:0 1rem}
 .ach-header{display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem}
@@ -36,9 +36,24 @@
 body.dark-mode .ach-card.earned{background:linear-gradient(135deg,#022c22,#14532d);border-color:#34d399}
 body.dark-mode .ach-card.earned .ach-title{color:#e2e8f0}
 body.dark-mode .ach-card.earned .ach-date{color:#34d399}
-body.dark-mode .ach-locked-section{background:#1e293b;border-color:#334155}
-body.dark-mode .ach-card.locked{background:#0f172a;border-color:#334155}
-body.dark-mode .ach-card.locked .ach-title{color:#64748b}
+body.dark-mode .ach-locked-section{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .ach-card.locked{background:#000000;border-color:rgba(255,255,255,.08)}
+body.dark-mode .ach-card.locked .ach-title{color:#636366}
+/* stat cards + panels */
+body.dark-mode .card{background:#1c1c1e!important;border-color:rgba(255,255,255,.1)}
+body.dark-mode .panel{background:#1c1c1e!important;border-color:rgba(255,255,255,.1)}
+body.dark-mode .activity-card{background:#1c1c1e!important;border-color:rgba(255,255,255,.1)}
+body.dark-mode .panel-header{background:#000000!important;border-bottom-color:rgba(255,255,255,.08)}
+body.dark-mode .panel-header h2{color:#f5f5f7}
+body.dark-mode .table thead th{background:#000000;border-bottom-color:rgba(255,255,255,.08);color:#f5f5f7}
+body.dark-mode .table tbody td{border-bottom-color:rgba(255,255,255,.06)}
+body.dark-mode .table tbody tr:hover{background:#2c2c2e}
+body.dark-mode .label{color:#98989d}
+body.dark-mode .value{color:#f5f5f7}
+body.dark-mode .topic-name{color:#f5f5f7}
+body.dark-mode .topics li{background:#000000;border-color:rgba(255,255,255,.08)}
+body.dark-mode .topics li:hover{background:#2c2c2e}
+body.dark-mode .activity{background:#000000!important}
 </style>
 {% endblock %}
 
@@ -156,6 +171,7 @@ body.dark-mode .ach-card.locked .ach-title{color:#64748b}
         <a href="{% url 'work_list' %}" class="link">Все работы</a>
       </div>
       {% if recent_solutions %}
+      <div style="overflow-x:auto">
       <table class="table">
         <thead>
           <tr>
@@ -167,15 +183,18 @@ body.dark-mode .ach-card.locked .ach-title{color:#64748b}
         </thead>
         <tbody>
           {% for s in recent_solutions %}
-          <tr>
-            <td><a href="{% url 'work_detail' s.work.id %}">{{ s.work.title }}</a></td>
+          <tr style="cursor:pointer" onclick="location.href='{% url 'solution_detail' s.id %}'">
+            <td style="max-width:300px;word-break:break-word">
+              <a href="{% url 'solution_detail' s.id %}" onclick="event.stopPropagation()">{{ s.work.title }}</a>
+            </td>
             <td><span class="badge status-{{ s.status }}">{{ s.get_status_display }}</span></td>
-            <td>{{ s.score }}</td>
-            <td>{{ s.submitted_at|date:'d.m.Y H:i' }}</td>
+            <td><strong>{{ s.score }}</strong>/{{ s.work.max_score }}</td>
+            <td style="white-space:nowrap;color:#6b7280">{{ s.submitted_at|date:'d.m.Y H:i' }}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+      </div>
       {% else %}
       <div class="empty">
         Вы ещё не отправляли решения. <a href="{% url 'work_list' %}">Начать</a>
@@ -204,6 +223,38 @@ body.dark-mode .ach-card.locked .ach-title{color:#64748b}
       {% endif %}
       </div>
     </div>
+
+  <!-- Курсовые работы -->
+  {% if course_works %}
+  <div style="margin-top:2rem;padding:0 1rem">
+    <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem">
+      <h2 style="font-size:1.25rem;font-weight:700;margin:0"><i class="fas fa-graduation-cap"></i> Курсовые работы</h2>
+    </div>
+    {% for cw in course_works %}
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.75rem">
+        <div style="flex:1;min-width:200px">
+          <div style="font-weight:700;font-size:1rem;color:#1f2937;margin-bottom:.25rem">{{ cw.title }}</div>
+          {% if cw.subject %}<div style="font-size:.82rem;color:#6b7280;margin-bottom:.4rem"><i class="fas fa-book"></i> {{ cw.subject.title }}</div>{% endif %}
+          {% if cw.description %}<div style="font-size:.875rem;color:#374151;margin-bottom:.5rem">{{ cw.description }}</div>{% endif %}
+          {% if cw.deadline %}<div style="font-size:.82rem;color:#9ca3af"><i class="fas fa-calendar"></i> Срок: {{ cw.deadline|date:"d.m.Y" }}</div>{% endif %}
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:.4rem">
+            {% if cw.subject.method_guide %}<a href="/media/{{ cw.subject.method_guide }}" target="_blank" style="font-size:.82rem;color:#667eea;text-decoration:none;font-weight:600"><i class="fas fa-file-pdf" style="color:#ef4444"></i> Методичка</a>{% endif %}
+            {% if cw.subject.example_cw_file %}<a href="/media/{{ cw.subject.example_cw_file }}" target="_blank" style="font-size:.82rem;color:#667eea;text-decoration:none;font-weight:600"><i class="fas fa-file-word" style="color:#2563eb"></i> Пример КП</a>{% endif %}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <span style="background:{{ cw.status_color }}22;color:{{ cw.status_color }};padding:.25rem .75rem;border-radius:20px;font-size:.8rem;font-weight:600;display:inline-block">
+            {{ cw.get_status_display }}
+          </span>
+          {% if cw.grade %}<div style="font-size:1.5rem;font-weight:700;color:#1f2937;margin-top:.4rem">{{ cw.grade }}</div>{% endif %}
+        </div>
+      </div>
+      {% if cw.teacher_note %}<div style="margin-top:.75rem;padding:.6rem .85rem;background:#fef3c7;border-radius:8px;font-size:.85rem;color:#92400e"><i class="fas fa-comment"></i> {{ cw.teacher_note }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <!-- Достижения -->
   <div class="achievements-section">

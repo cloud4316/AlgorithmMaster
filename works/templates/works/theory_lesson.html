@@ -54,8 +54,12 @@
       <div class="lesson-breadcrumb">
         <span>{{ module.title }}</span> <i class="fas fa-chevron-right"></i> <span>Урок {{ current_index|add:1 }}</span>
       </div>
-      <div class="lesson-progress-indicator">
-        {{ current_index|add:1 }} / {{ all_lessons|length }}
+      <div style="display:flex;align-items:center;gap:.75rem">
+        <button onclick="openFlashcards()" title="Флеш-карточки по уроку"
+                style="background:none;border:none;cursor:pointer;font-size:.8rem;font-weight:600;padding:3px 8px;border-radius:6px;background:#f0f4ff;color:#667eea;border:1px solid #c7d2fe;transition:.15s">📇 Карточки</button>
+        <button id="btn-bookmark" onclick="toggleBookmark()" title="Добавить в закладки"
+                style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:2px 4px;line-height:1;transition:.15s;color:#9ca3af">☆</button>
+        <div class="lesson-progress-indicator">{{ current_index|add:1 }} / {{ all_lessons|length }}</div>
       </div>
     </div>
 
@@ -290,6 +294,7 @@ function closeSidebar() {
   document.querySelector('.lesson-sidebar').classList.remove('open');
   document.getElementById('sidebarOverlay').classList.remove('open');
 }
+
 </script>
 
 <style>
@@ -328,6 +333,12 @@ function closeSidebar() {
 .theory-body div[style*="max-width"]{overflow:visible}
 .theory-body div[style*="overflow-x"]{overflow:visible !important}
 .theory-body div[style*="overflow-x"] svg{max-width:640px;margin:0 auto;display:block}
+.theory-body div[style*="grid-template-columns"] > div,
+.theory-body div[style*="display:grid"] > div,
+.theory-body div[style*="display: grid"] > div{
+  overflow:visible!important;white-space:normal!important;
+  word-break:break-word;min-width:0;
+}
 .theory-table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}
 .theory-table th{background:#f3f4f6;padding:.5rem .75rem;text-align:left;font-weight:600}
 .theory-table td{padding:.45rem .75rem;border-bottom:1px solid #f3f4f6}
@@ -343,7 +354,7 @@ function closeSidebar() {
 .output-header{padding:.4rem 1rem;background:#282a36;color:#6272a4;font-size:.8rem}
 #outputText{padding:.75rem 1rem;color:#f8f8f2;font-family:monospace;font-size:.85rem;white-space:pre-wrap;margin:0}
 #outputText.error-output{color:#ff5555}
-.lesson-navigation{display:flex;justify-content:space-between;align-items:center;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid #e5e7eb}
+.lesson-navigation{display:flex;justify-content:space-between;align-items:center;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid #e5e7eb;gap:2rem}
 .nav-btn{display:flex;align-items:center;gap:.5rem;padding:.6rem 1.2rem;border-radius:8px;text-decoration:none;color:#374151;border:1px solid #e5e7eb;font-size:.9rem;transition:.15s}
 .nav-btn:hover{border-color:#667eea;color:#667eea}
 .btn-quiz{background:#fef3c7;color:#d97706;border-color:#fcd34d}
@@ -353,11 +364,20 @@ function closeSidebar() {
 .sidebar-overlay{display:none}
 @media(max-width:768px){
   .lesson-layout{grid-template-columns:1fr}
-  .lesson-sidebar{display:none;position:fixed;left:0;top:70px;width:280px;height:calc(100vh - 70px);background:#fff;z-index:200;box-shadow:4px 0 20px rgba(0,0,0,.15)}
+  .lesson-sidebar{display:none;position:fixed;left:0;top:68px;width:280px;height:calc(100vh - 68px);background:#fff;z-index:200;box-shadow:4px 0 20px rgba(0,0,0,.15)}
   .lesson-sidebar.open{display:flex;flex-direction:column;overflow-y:auto}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199}
   .sidebar-overlay.open{display:block}
-  .lesson-main{padding:1rem}
+  /* min-width:0 — критично: без него grid 1fr тянется под CodeMirror */
+  .lesson-main{padding:.85rem;min-width:0;max-width:100%;overflow-x:hidden;box-sizing:border-box}
+  .lesson-content{min-width:0;max-width:100%;overflow-x:hidden}
+  .theory-body{min-width:0;word-break:break-word;overflow-wrap:break-word}
+  /* Код-блоки с редактором — горизонтальный скролл, не распирают */
+  .code-block-wrap,.CodeMirror,.CodeMirror-scroll{
+    max-width:100% !important;
+    overflow-x:auto !important;
+    box-sizing:border-box;
+  }
   .sidebar-toggle{display:flex}
 }
 .sidebar-progress{padding:.5rem 1rem .25rem;display:flex;flex-direction:column;gap:.3rem}
@@ -370,9 +390,44 @@ function closeSidebar() {
 .notes-header{background:#f9fafb;padding:.6rem 1rem;display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-weight:500;color:#374151;border-bottom:1px solid #e5e7eb}
 .notes-saved{color:#059669;font-size:.78rem;display:flex;align-items:center;gap:.35rem}
 .notes-area{width:100%;min-height:120px;border:none;padding:.85rem 1rem;font-size:.9rem;line-height:1.6;resize:vertical;font-family:inherit;color:#374151;background:#fff;outline:none;box-sizing:border-box}
-body.dark-mode .notes-block{border-color:#334155}
-body.dark-mode .notes-header{background:#1e293b;color:#e2e8f0;border-color:#334155}
-body.dark-mode .notes-area{background:#0f172a;color:#e2e8f0}
+body.dark-mode .notes-block{border-color:rgba(255,255,255,.1)}
+body.dark-mode .notes-header{background:#2c2c2e;color:#f5f5f7;border-color:rgba(255,255,255,.1)}
+body.dark-mode .notes-area{background:#1c1c1e;color:#f5f5f7}
+/* ── Dark mode sidebar & content ── */
+body.dark-mode .lesson-sidebar{border-right-color:rgba(255,255,255,.08);background:#1c1c1e}
+body.dark-mode .sidebar-header{border-bottom-color:rgba(255,255,255,.08)}
+body.dark-mode .sidebar-header h4{color:#f5f5f7}
+body.dark-mode .sidebar-quizzes{border-top-color:rgba(255,255,255,.08)}
+body.dark-mode .sidebar-quizzes h5{color:#98989d}
+body.dark-mode .quiz-link{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
+body.dark-mode .lesson-nav-item{color:#f5f5f7}
+body.dark-mode .lesson-nav-item:hover{background:#2c2c2e}
+body.dark-mode .lesson-nav-item.active{background:rgba(99,102,241,.2);color:#a5b4fc}
+body.dark-mode .lesson-num{background:#3a3a3c;color:#f5f5f7}
+body.dark-mode .lesson-time{color:#636366}
+body.dark-mode .sp-bar{background:#3a3a3c}
+body.dark-mode .sp-text{color:#98989d}
+body.dark-mode .theory-body h2{color:#f5f5f7}
+body.dark-mode .theory-body h3{color:#e5e5ea}
+body.dark-mode .theory-body p{color:#c7c7cc}
+body.dark-mode .theory-body li{color:#c7c7cc}
+body.dark-mode .theory-body code{background:#2c2c2e;color:#a5b4fc;border:1px solid rgba(255,255,255,.1)}
+body.dark-mode .theory-table{border-color:rgba(255,255,255,.08)}
+body.dark-mode .theory-table th{background:#2c2c2e;color:#f5f5f7;border-color:rgba(255,255,255,.08)}
+body.dark-mode .theory-table td{border-color:rgba(255,255,255,.06);color:#c7c7cc}
+body.dark-mode .tip{background:rgba(99,102,241,.12);border-left-color:#6366f1;color:#c7c7cc}
+body.dark-mode .warning{background:rgba(249,115,22,.1);border-left-color:#f97316;color:#c7c7cc}
+body.dark-mode .lesson-navigation{border-top-color:rgba(255,255,255,.08)}
+body.dark-mode .nav-btn{color:#f5f5f7;border-color:rgba(255,255,255,.1)}
+body.dark-mode .nav-btn:hover{border-color:#6366f1;color:#a5b4fc}
+body.dark-mode .btn-mark-done{background:#2c2c2e;color:#f5f5f7;border-color:rgba(255,255,255,.1)}
+body.dark-mode .btn-quiz{background:rgba(245,158,11,.12);color:#fbbf24;border-color:rgba(245,158,11,.2)}
+body.dark-mode .lesson-topbar{color:#98989d}
+body.dark-mode .lesson-meta{color:#98989d}
+body.dark-mode .lesson-breadcrumb{color:#98989d}
+@media(max-width:768px){
+  body.dark-mode .lesson-sidebar{background:#1c1c1e}
+}
 </style>
 
 <script>
@@ -404,6 +459,213 @@ body.dark-mode .notes-area{background:#0f172a;color:#e2e8f0}
   area.addEventListener('input', function() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNotes, 1200);
+  });
+})();
+
+// ── Закладки ─────────────────────────────────────────────────────────────────
+(function(){
+  const LESSON_ID = {{ lesson.id }};
+  const MODULE_TITLE = '{{ module.title|escapejs }}';
+  const KEY = 'theory_bookmarks';
+
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(e){ return {}; } }
+  function save(d){ try{ localStorage.setItem(KEY, JSON.stringify(d)); }catch(e){} }
+
+  function render(){
+    const bm = load();
+    const btn = document.getElementById('btn-bookmark');
+    if(!btn) return;
+    if(bm[LESSON_ID]){
+      btn.textContent = '★';
+      btn.style.color = '#f59e0b';
+      btn.title = 'Убрать из закладок';
+    } else {
+      btn.textContent = '☆';
+      btn.style.color = '#9ca3af';
+      btn.title = 'Добавить в закладки';
+    }
+  }
+
+  window.toggleBookmark = function(){
+    const bm = load();
+    if(bm[LESSON_ID]){
+      delete bm[LESSON_ID];
+    } else {
+      bm[LESSON_ID] = {title: '{{ lesson.title|escapejs }}', module: MODULE_TITLE, url: location.pathname};
+    }
+    save(bm);
+    render();
+  };
+
+  render();
+})();
+</script>
+{% if not request.user.is_staff %}
+<style>
+.lesson-content,.lesson-body{user-select:none;-webkit-user-select:none}
+@media print{body{display:none!important}}
+#sec-overlay{
+  display:none;position:fixed;inset:0;background:#fff;z-index:99999;
+  align-items:center;justify-content:center;flex-direction:column;gap:.5rem;
+}
+#sec-overlay.active{display:flex}
+#sec-overlay span{font-size:1rem;color:#6b7280}
+.sec-warning-bar{
+  background:#fef3c7;border-bottom:1px solid #fbbf24;
+  color:#92400e;font-size:.8rem;padding:.4rem 1rem;
+  text-align:center;position:sticky;top:0;z-index:100;
+}
+.sec-warning-bar i{margin-right:.35rem}
+</style>
+<div id="sec-overlay"><span>🔒 Вернитесь на вкладку чтобы продолжить</span></div>
+<div class="sec-warning-bar">
+  <i class="fas fa-shield-alt"></i>
+  Снятие скриншотов и копирование материалов запрещено. Все действия на странице фиксируются и передаются администрации.
+</div>
+<script>
+(function(){
+  var overlay=document.getElementById('sec-overlay');
+  function hide(){overlay.classList.remove('active')}
+  function show(){overlay.classList.add('active')}
+  document.addEventListener('visibilitychange',function(){
+    document.hidden ? show() : hide();
+  });
+  window.addEventListener('blur',show);
+  window.addEventListener('focus',hide);
+
+  // PrintScreen, Win+Shift+S (частично), Ctrl+P
+  document.addEventListener('keydown',function(e){
+    var key = e.key || '';
+    if(key === 'PrintScreen' || (e.shiftKey && key.toLowerCase() === 's')){
+      show();setTimeout(hide,3000);
+    }
+    if((e.ctrlKey||e.metaKey) && key.toLowerCase()==='p'){
+      e.preventDefault();show();setTimeout(hide,2000);
+    }
+  });
+
+  ['copy','cut','contextmenu'].forEach(function(ev){
+    document.addEventListener(ev,function(e){
+      if(e.target.closest('.lesson-content,.lesson-body,.lesson-layout')){e.preventDefault();return false;}
+    });
+  });
+})();
+</script>
+{% endif %}
+
+<!-- ═══ Флеш-карточки ══════════════════════════════════════════════ -->
+<div id="fc-modal" style="display:none;position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);overflow:auto">
+  <div style="max-width:680px;margin:3rem auto;padding:0 1rem">
+    <div style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid #e5e7eb">
+        <h3 style="margin:0;font-size:1rem">📇 Флеш-карточки — <span id="fc-lesson-name"></span></h3>
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <span id="fc-counter" style="font-size:.85rem;color:#6b7280"></span>
+          <button onclick="closeFlashcards()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#9ca3af;line-height:1">&#10005;</button>
+        </div>
+      </div>
+      <div style="padding:1.5rem">
+        <div id="fc-card" onclick="flipCard()"
+             style="perspective:1000px;cursor:pointer;min-height:200px;border-radius:12px;position:relative;user-select:none">
+          <div id="fc-inner" style="position:relative;width:100%;min-height:200px;transform-style:preserve-3d;transition:transform .45s">
+            <div id="fc-front" style="position:absolute;inset:0;backface-visibility:hidden;border-radius:12px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center">
+              <div style="font-size:.75rem;opacity:.75;margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.08em">Термин</div>
+              <div id="fc-front-text" style="font-size:1.25rem;font-weight:700;line-height:1.4"></div>
+              <div style="font-size:.75rem;opacity:.6;margin-top:1.25rem">Нажми чтобы открыть определение</div>
+            </div>
+            <div id="fc-back" style="position:absolute;inset:0;backface-visibility:hidden;transform:rotateY(180deg);border-radius:12px;background:#f8fafc;border:2px solid #e5e7eb;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center">
+              <div style="font-size:.75rem;color:#9ca3af;margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.08em">Определение</div>
+              <div id="fc-back-text" style="font-size:1rem;color:#374151;line-height:1.6"></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:1.25rem;gap:.75rem">
+          <button onclick="prevCard()" style="flex:1;padding:.6rem;border-radius:8px;border:1px solid #e5e7eb;background:#f9fafb;cursor:pointer;font-size:.9rem">&#8592; Назад</button>
+          <button onclick="nextCard()" style="flex:1;padding:.6rem;border-radius:8px;border:none;background:#667eea;color:#fff;cursor:pointer;font-size:.9rem;font-weight:600">Вперёд &#8594;</button>
+        </div>
+        <div id="fc-progress" style="margin-top:.75rem;background:#f3f4f6;border-radius:99px;height:5px;overflow:hidden">
+          <div id="fc-prog-fill" style="height:100%;background:#667eea;border-radius:99px;transition:width .3s"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var cards=[], ci=0, flipped=false;
+
+  window.openFlashcards=function(){
+    cards=extractCards();
+    if(!cards.length){ alert('В этом уроке не найдено заголовков для карточек.'); return; }
+    ci=0; flipped=false;
+    document.getElementById('fc-lesson-name').textContent='{{ lesson.title|escapejs|truncatechars:30 }}';
+    document.getElementById('fc-modal').style.display='block';
+    document.body.style.overflow='hidden';
+    showCard();
+  };
+
+  window.closeFlashcards=function(){
+    document.getElementById('fc-modal').style.display='none';
+    document.body.style.overflow='';
+  };
+
+  document.getElementById('fc-modal').addEventListener('click',function(e){
+    if(e.target===this) closeFlashcards();
+  });
+
+  function extractCards(){
+    var res=[];
+    var body=document.querySelector('.theory-body');
+    if(!body) return res;
+    var nodes=Array.from(body.querySelectorAll('h2,h3,h4'));
+    nodes.forEach(function(h){
+      var term=h.textContent.trim();
+      if(!term) return;
+      var def='';
+      var next=h.nextElementSibling;
+      while(next && !['H2','H3','H4'].includes(next.tagName)){
+        var t=next.textContent.trim();
+        if(t){ def=t.length>300?t.slice(0,300)+'…':t; break; }
+        next=next.nextElementSibling;
+      }
+      if(!def) def='Смотри содержание урока';
+      res.push({front:term, back:def});
+    });
+    return res;
+  }
+
+  function showCard(){
+    if(!cards.length) return;
+    flipped=false;
+    document.getElementById('fc-inner').style.transform='rotateY(0deg)';
+    document.getElementById('fc-front-text').textContent=cards[ci].front;
+    document.getElementById('fc-back-text').textContent=cards[ci].back;
+    document.getElementById('fc-counter').textContent=(ci+1)+' / '+cards.length;
+    var pct=Math.round((ci+1)/cards.length*100);
+    document.getElementById('fc-prog-fill').style.width=pct+'%';
+  }
+
+  window.flipCard=function(){
+    flipped=!flipped;
+    document.getElementById('fc-inner').style.transform=flipped?'rotateY(180deg)':'rotateY(0deg)';
+  };
+
+  window.nextCard=function(){
+    if(ci<cards.length-1){ ci++; showCard(); }
+    else{ closeFlashcards(); }
+  };
+
+  window.prevCard=function(){
+    if(ci>0){ ci--; showCard(); }
+  };
+
+  document.addEventListener('keydown',function(e){
+    if(document.getElementById('fc-modal').style.display==='none') return;
+    if(e.key==='ArrowRight'||e.key==='Enter') nextCard();
+    else if(e.key==='ArrowLeft') prevCard();
+    else if(e.key===' ') { e.preventDefault(); flipCard(); }
+    else if(e.key==='Escape') closeFlashcards();
   });
 })();
 </script>

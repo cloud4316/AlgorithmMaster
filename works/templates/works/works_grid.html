@@ -1,8 +1,38 @@
 {% load static %}
-
+<style>
+.work-card{position:relative}
+.wcard-status-badge{
+  position:absolute;top:10px;right:10px;
+  display:inline-flex;align-items:center;gap:.3rem;
+  padding:.22rem .6rem;border-radius:20px;
+  font-size:.72rem;font-weight:700;z-index:2;
+  pointer-events:none;
+}
+.wsb-ok     {background:#d1fae5;color:#065f46}
+.wsb-partial{background:#fef9c3;color:#854d0e}
+.wsb-fail   {background:#fee2e2;color:#991b1b}
+.wsb-pending{background:#dbeafe;color:#1e40af}
+.wcard-done   {border-left:3px solid #10b981!important}
+.wcard-partial{border-left:3px solid #f59e0b!important}
+.wcard-fail   {border-left:3px solid #ef4444!important}
+.wcard-pending{border-left:3px solid #3b82f6!important}
+</style>
 <div class="works-grid">
   {% for work in works %}
-    <div class="work-card" data-work-id="{{ work.id }}">
+    <div class="work-card {% if work.user_status == 'correct' %}wcard-done{% elif work.user_status == 'partially_correct' %}wcard-partial{% elif work.user_status in 'submitted,checking' %}wcard-pending{% elif work.user_status == 'incorrect' %}wcard-fail{% endif %}" data-work-id="{{ work.id }}">
+      {% if work.user_status != 'not_started' %}
+      <div class="wcard-status-badge
+        {% if work.user_status == 'correct' %}wsb-ok
+        {% elif work.user_status == 'partially_correct' %}wsb-partial
+        {% elif work.user_status == 'incorrect' %}wsb-fail
+        {% else %}wsb-pending{% endif %}">
+        {% if work.user_status == 'correct' %}<i class="fas fa-check"></i> Сдано
+        {% elif work.user_status == 'partially_correct' %}<i class="fas fa-adjust"></i> Частично
+        {% elif work.user_status == 'incorrect' %}<i class="fas fa-times"></i> Неверно
+        {% else %}<i class="fas fa-clock"></i> На проверке{% endif %}
+        {% if work.user_score %}&nbsp;{{ work.user_score }}%{% endif %}
+      </div>
+      {% endif %}
       <div class="work-card-inner">
         <div class="work-content">
           <div class="work-title">

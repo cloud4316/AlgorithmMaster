@@ -464,3 +464,21 @@
         padding: 1rem;
     }
 }
+
+/* ── Dark mode ──────────────────────────────────────────── */
+body.dark-mode .submission-header,
+body.dark-mode .submission-card,
+body.dark-mode .checking-status,
+body.dark-mode .next-steps {
+  background: #1c1c1e;
+  border-color: rgba(255,255,255,.1);
+}
+body.dark-mode .submission-info,
+body.dark-mode .info-item {
+  border-color: rgba(255,255,255,.06);
+}
+body.dark-mode .step-item {
+  background: #2c2c2e;
+  border-color: rgba(255,255,255,.08);
+}
+body.dark-mode .step-item:hover { background: #3a3a3c; }

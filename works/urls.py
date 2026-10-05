@@ -15,7 +15,9 @@ urlpatterns = [
     path('teacher/deactivate/<int:user_id>/', views.deactivate_user, name='deactivate_user'),
     path('teacher/create-user/',              views.create_user,     name='create_user'),
     path('teacher/reset-password/<int:user_id>/', views.reset_password, name='reset_password'),
+    path('teacher/rename-user/<int:user_id>/',   views.rename_user,    name='rename_user'),
     path('teacher/subject-access/<int:user_id>/', views.set_subject_access, name='set_subject_access'),
+    path('teacher/bulk-subject-access/', views.bulk_subject_access, name='bulk_subject_access'),
 
     # ── Практические работы ───────────────────────────────────────────────────
     path('works/', views.work_list, name='work_list'),
@@ -29,6 +31,7 @@ urlpatterns = [
     # ── Профиль ───────────────────────────────────────────────────────────────
     path('profile/', views.profile, name='profile'),
     path('profile/change-password/', views.change_password, name='change_password'),
+    path('profile/student/<int:user_id>/', views.student_profile, name='student_profile'),
 
     # ── Теория ────────────────────────────────────────────────────────────────
     path('theory/', views.theory_list, name='theory_list'),
@@ -38,6 +41,9 @@ urlpatterns = [
 
     # ── Предметы ──────────────────────────────────────────────────────────────
     path('subject/<slug:slug>/', views.switch_subject, name='switch_subject'),
+
+    # ── ПИД-симулятор (МДК 03.02) ────────────────────────────────────────────
+    path('pid-simulator/', views.pid_simulator, name='pid_simulator'),
 
     # ── Симулятор схем (МПС) ───────────────────────────────────────────────────
     path('circuit/editor/',                  views.circuit_editor_free,       name='circuit_editor_free'),
@@ -57,7 +63,11 @@ urlpatterns = [
     path('quiz/', views.quiz_list, name='quiz_list'),
     path('quiz/<int:quiz_id>/', views.quiz_detail, name='quiz_detail'),
     path('quiz/<int:quiz_id>/submit/', views.submit_quiz, name='submit_quiz'),
+    path('api/quiz/check-answer/<int:question_id>/', views.check_quiz_answer, name='check_quiz_answer'),
+    path('teacher/reset-student/<int:user_id>/', views.reset_student_account, name='reset_student_account'),
+    path('quiz/result/<int:attempt_id>/', views.quiz_result, name='quiz_result'),
     path('quiz/<int:quiz_id>/adaptive/', views.quiz_adaptive, name='quiz_adaptive'),
+    path('quiz/<int:quiz_id>/history/', views.quiz_history, name='quiz_history'),
 
 
     # ── Уведомления ──────────────────────────────────────────────────────────────
@@ -70,6 +80,12 @@ urlpatterns = [
 
     # ── Поиск по теории ───────────────────────────────────────────────────────────
     path('theory/search/', views.theory_search, name='theory_search'),
+
+    # ── Курсовые работы ───────────────────────────────────────────────────────────
+    path('teacher/coursework/',                    views.coursework_list,   name='coursework_list'),
+    path('teacher/coursework/assign/',             views.coursework_assign, name='coursework_assign'),
+    path('teacher/coursework/<int:cw_id>/edit/',   views.coursework_assign, name='coursework_edit'),
+    path('teacher/coursework/<int:cw_id>/delete/', views.coursework_delete, name='coursework_delete'),
 
     # ── Журнал и ручная проверка (преподаватель) ──────────────────────────────────
     path('teacher/gradebook/',                    views.gradebook,          name='gradebook'),
@@ -98,6 +114,8 @@ urlpatterns = [
     path('api/check-status/<int:check_id>/', views.get_check_status, name='get_check_status'),
     path('api/test-code/<int:work_id>/', views.test_code_locally, name='test_code_locally'),
     path('api/run-code/', views.run_code_snippet, name='run_code_snippet'),
+    path('api/plagiarism/<int:solution_id>/', views.check_plagiarism, name='check_plagiarism'),
+    path('api/recheck-doc/<int:solution_id>/', views.recheck_doc, name='recheck_doc'),
     path('api/unlock-hint/<int:hint_id>/', views.unlock_hint, name='unlock_hint'),
 
     # ── Продление дедлайна ────────────────────────────────────────────────────
@@ -106,6 +124,8 @@ urlpatterns = [
 
     # ── Онлайн-песочница ──────────────────────────────────────────────────────
     path('playground/', views.playground, name='playground'),
+    path('teacher/pygrid/', views.pygrid_game, name='pygrid_game'),
+    path('pygrid/', views.pygrid_beta, name='pygrid_beta'),
 
     # ── Хранилище проектов ────────────────────────────────────────────────────
     path('projects/', views.project_list, name='project_list'),
@@ -120,4 +140,15 @@ urlpatterns = [
 
     # ── О проекте ─────────────────────────────────────────────────────────────
     path('about/', views.about, name='about'),
+
+    # ── Алгоритм-визуализатор ─────────────────────────────────────────────────
+    path('visualizer/', views.algo_visualizer, name='algo_visualizer'),
+
+    # ── PyGrid лидерборд API ──────────────────────────────────────────────────
+    path('api/pygrid/score/', views.pygrid_score_submit, name='pygrid_score_submit'),
+    path('api/pygrid/leaderboard/', views.pygrid_leaderboard, name='pygrid_leaderboard'),
+
+    # ── Запрос на проверку всех работ ────────────────────────────────────────
+    path('api/submit-all-for-review/', views.submit_all_for_review, name='submit_all_for_review'),
+    path('api/review-request/<int:rr_id>/done/', views.mark_review_done, name='mark_review_done'),
 ]

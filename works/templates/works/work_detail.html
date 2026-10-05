@@ -4,7 +4,26 @@
 {% block title %}{{ work.title }} - Практическая работа #{{ work.order }}{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'works/css/work-detail.css' %}">
+<link rel="stylesheet" href="{% static 'works/css/work-detail.css' %}?v=2">
+<style>
+body.dark-mode .breadcrumb,
+body.dark-mode .work-header,
+body.dark-mode .content-section{background:#1e293b!important;border-color:#334155}
+body.dark-mode .section-header{background:#0f172a!important;border-bottom-color:#334155}
+body.dark-mode .section-header h2{color:#e2e8f0}
+body.dark-mode .work-main-title{color:#f1f5f9}
+body.dark-mode .meta-item{background:#1e293b;border-color:#334155;color:#e2e8f0}
+body.dark-mode .task-examples{background:#0f172a!important;border-color:#334155}
+body.dark-mode .task-examples h3{color:#e2e8f0}
+body.dark-mode .example-card{background:#1e293b!important;border-color:#334155}
+body.dark-mode .example-header{background:#1e1b4b;color:#a5b4fc}
+body.dark-mode .timeline-item{background:#0f172a!important;border-color:#334155}
+body.dark-mode .timeline-item:hover{background:#1e293b!important}
+body.dark-mode .solution-comment,
+body.dark-mode .test-results{background:#1e293b!important;border-color:#334155}
+body.dark-mode .solution-date{color:#94a3b8}
+body.dark-mode .solution-file{color:#e2e8f0}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -51,7 +70,7 @@
             {% if best_solution %}
             <span class="meta-item meta-stat meta-best">
                 <i class="fas fa-trophy"></i>
-                Лучший: {{ best_solution.score }}/{{ work.max_score }}
+                Лучший: {{ best_solution.score_points }}/{{ work.max_score }}
             </span>
             {% endif %}
         </div>
@@ -107,7 +126,7 @@
             </div>
             <div class="section-content">
                 <div class="task-content">
-                    {{ work.description|safe }}
+                    <div class="task-desc-html">{{ work.description|safe }}</div>
                 </div>
                 
                 {% if work.input_example or work.output_example %}
@@ -151,6 +170,27 @@
                 </div>
                 {% endif %}
 
+                {% if work.wokwi_url %}
+                <div class="wokwi-block">
+                    <div class="wokwi-header">
+                        <img src="https://wokwi.com/favicon.ico" width="18" height="18" alt="Wokwi" style="border-radius:4px">
+                        <span>Wokwi — симулятор Arduino</span>
+                        <a href="{{ work.wokwi_url }}" target="_blank" class="tinkercad-open-btn" rel="noopener">
+                            <i class="fas fa-external-link-alt"></i> Открыть в Wokwi
+                        </a>
+                    </div>
+                    <div class="wokwi-iframe-wrap">
+                        <iframe
+                            src="{{ work.wokwi_url }}{% if '?' in work.wokwi_url %}&{% else %}?{% endif %}embed=1&theme=dark"
+                            width="100%" height="550"
+                            frameborder="0"
+                            allowfullscreen
+                            loading="lazy"
+                            title="Wokwi симулятор для {{ work.title }}"></iframe>
+                    </div>
+                </div>
+                {% endif %}
+
                 {% if work.tinkercad_url %}
                 <div class="tinkercad-block">
                     <div class="tinkercad-header">
@@ -179,17 +219,61 @@
                 <h2><i class="fas fa-code"></i>Отправить решение</h2>
             </div>
             <div class="section-content">
-                <form method="post" enctype="multipart/form-data" class="solution-form" id="solution-form">
+                <!-- Вкладки -->
+                <div class="submit-tabs">
+                    <button class="stab active" onclick="switchTab('upload', this)"><i class="fas fa-upload"></i> Загрузить файл</button>
+                    <button class="stab" onclick="switchTab('editor', this)"><i class="fas fa-keyboard"></i> Написать код</button>
+                </div>
+
+                <form method="post" enctype="multipart/form-data" class="solution-form" id="solution-form" onsubmit="return prepareSubmit()">
                     {% csrf_token %}
-                    
-                    <div class="form-group">
-                        <label class="file-upload-label">
-                            <i class="fas fa-upload"></i>
-                            <span id="file-name">Выберите файл с решением</span>
-                            <input type="file" name="code_file" id="code_file" accept=".py,.java,.cpp,.js,.txt,.ino,.c" required
-                                   onchange="document.getElementById('file-name').textContent = this.files[0]?.name || 'Выберите файл с решением'">
-                        </label>
-                        <small class="form-text">Поддерживаемые форматы: .py, .java, .cpp, .js, .txt</small>
+
+                    <!-- Вкладка: Загрузить файл -->
+                    <div id="tab-upload" class="tab-panel">
+                        <div class="form-group">
+                            <label class="file-upload-label">
+                                <i class="fas fa-upload"></i>
+                                <span id="file-name">Выберите файл с решением</span>
+                                <input type="file" name="code_file" id="code_file" accept=".py,.java,.cpp,.c,.js,.kt,.cs,.ino,.txt,.docx,.doc,.pdf"
+                                       onchange="document.getElementById('file-name').textContent = this.files[0]?.name || 'Выберите файл с решением'">
+                            </label>
+                            <small class="form-text">Форматы: .py .java .cpp .c .js .kt .cs .ino .txt .docx .doc .pdf (до 10 МБ для doc/pdf)</small>
+                        </div>
+                    </div>
+
+                    <!-- Вкладка: Написать код -->
+                    <div id="tab-editor" class="tab-panel" style="display:none">
+                        <div class="editor-toolbar">
+                            <select id="lang-select" onchange="updateEditorLang()" class="lang-picker">
+                                <option value="py">Python (.py)</option>
+                                <option value="cpp">C++ (.cpp)</option>
+                                <option value="c">C (.c)</option>
+                                <option value="java">Java (.java)</option>
+                                <option value="js">JavaScript (.js)</option>
+                                <option value="cs">C# (.cs)</option>
+                                <option value="kt">Kotlin (.kt)</option>
+                                <option value="ino">Arduino (.ino)</option>
+                            </select>
+                            <button type="button" class="btn btn-sm btn-outline-editor" onclick="clearEditor()"><i class="fas fa-trash-alt"></i> Очистить</button>
+                        </div>
+                        <div class="mobile-code-bar" id="mobileCodeBar">
+                          <button type="button" class="mcb-btn" data-ins="    ">⇥</button>
+                          <button type="button" class="mcb-btn" data-ins="{">{ }</button>
+                          <button type="button" class="mcb-btn" data-ins="(">()</button>
+                          <button type="button" class="mcb-btn" data-ins="[">[</button>
+                          <button type="button" class="mcb-btn" data-ins="]">]</button>
+                          <button type="button" class="mcb-btn" data-ins=";">&semi;</button>
+                          <button type="button" class="mcb-btn" data-ins=":">&colon;</button>
+                          <button type="button" class="mcb-btn" data-ins="=">=</button>
+                          <button type="button" class="mcb-btn" data-ins="+">&plus;</button>
+                          <button type="button" class="mcb-btn" data-ins='"'>&quot;</button>
+                          <button type="button" class="mcb-btn" data-ins="'">&apos;</button>
+                          <button type="button" class="mcb-btn" data-ins="#">#</button>
+                        </div>
+                        <textarea id="inline-editor" class="inline-code-editor" placeholder="# Напишите ваш код здесь...
+# Пример (Python):
+print('Hello, World!')" spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+                        <small class="form-text">Код будет сохранён как файл и отправлен на проверку</small>
                     </div>
 
                     <div class="form-actions">
@@ -234,7 +318,7 @@
                                     </span>
                                     {% if solution.score > 0 %}
                                     <span class="score-badge">
-                                        {{ solution.score }}/{{ work.max_score }}
+                                        {{ solution.score_points }}/{{ work.max_score }}
                                     </span>
                                     {% endif %}
                                 </div>
@@ -373,6 +457,35 @@ function unlockHint(hintId, cost) {
 
 {% block extra_js %}
 <style>
+/* Inline editor + tabs */
+.submit-tabs { display:flex; gap:.5rem; margin-bottom:1rem; }
+.stab {
+    padding:.5rem 1.1rem; border-radius:8px; border:1.5px solid #e5e7eb;
+    background:#f9fafb; color:#374151; cursor:pointer; font-size:.88rem; font-weight:500;
+    transition:.15s;
+}
+.stab.active { background:#667eea; color:#fff; border-color:#667eea; }
+.editor-toolbar {
+    display:flex; align-items:center; gap:.6rem; margin-bottom:.5rem;
+}
+.lang-picker {
+    padding:.3rem .6rem; border-radius:6px; border:1.5px solid #e5e7eb;
+    font-size:.85rem; background:#f9fafb; color:#374151;
+}
+.btn-outline-editor {
+    padding:.3rem .7rem; font-size:.8rem; border-radius:6px;
+    border:1.5px solid #e5e7eb; background:transparent; color:#6b7280; cursor:pointer;
+}
+.inline-code-editor {
+    width:100%; min-height:320px; font-family:'Fira Code',Consolas,monospace;
+    font-size:.88rem; line-height:1.65; padding:1rem;
+    border:1.5px solid #e5e7eb; border-radius:10px;
+    background:#1e1e2e; color:#cdd6f4;
+    resize:vertical; box-sizing:border-box;
+    tab-size:4; white-space:pre;
+}
+.inline-code-editor:focus { outline:none; border-color:#667eea; box-shadow:0 0 0 3px rgba(102,126,234,.15); }
+
 /* Стили для модального окна тестирования */
 .test-modal {
     position: fixed;
@@ -522,91 +635,131 @@ function unlockHint(hintId, cost) {
 .module-work-chip.diff-hard{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
 body.dark-mode .theory-link-banner{background:#1e1b4b20;border-color:#4338ca40;border-left-color:#667eea}
 body.dark-mode .theory-link-title{color:#e0e7ff}
+body.dark-mode .theory-link-desc{color:#94a3b8}
+body.dark-mode .module-works-label{color:#94a3b8}
+body.dark-mode .module-work-chip{background:#1e293b;color:#e2e8f0;border-color:#334155}
+body.dark-mode .hint-revealed p{color:#e2e8f0}
+body.dark-mode .hint-revealed strong{color:#fbbf24}
 </style>
 <script>
+// ── Вкладки сдачи работы ───────────────────────────────────────────────
+let activeTab = 'upload';
 let testModal = null;
 
-function testSolution() {
-    console.log('testSolution вызвана');
-    
-    const codeFile = document.getElementById('code_file');
-    console.log('codeFile элемент:', codeFile);
-    
-    if (!codeFile) {
-        alert('Ошибка: не найден элемент для загрузки файла');
-        return;
-    }
-    
-    if (!codeFile.files || !codeFile.files[0]) {
-        alert('Сначала выберите файл с кодом');
-        return;
-    }
-    
-    console.log('Файл выбран:', codeFile.files[0].name);
-    
-    // Читаем содержимое файла
-    const file = codeFile.files[0];
-    const reader = new FileReader();
-    
-    reader.onload = function(e) {
-        console.log('Файл прочитан, размер:', e.target.result.length);
-        const codeContent = e.target.result;
-        runLocalTest(codeContent);
-    };
-    
-    reader.onerror = function(e) {
-        console.error('Ошибка чтения файла:', e);
-        alert('Ошибка при чтении файла');
-    };
-    
-    reader.readAsText(file, 'utf-8');
+function switchTab(tab, btn) {
+    activeTab = tab;
+    document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById('tab-' + tab).style.display = 'block';
 }
 
-function runLocalTest(codeContent) {
-    console.log('runLocalTest вызвана, размер кода:', codeContent.length);
-    
-    // Показываем модальное окно с тестированием
-    showTestModal();
-    
-    // Отправляем запрос на тестирование
-    const formData = new FormData();
-    formData.append('code', codeContent);
-    
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-    if (!csrfToken) {
-        console.error('CSRF токен не найден');
-        displayTestError('Ошибка: CSRF токен не найден');
-        return;
-    }
-    
-    formData.append('csrfmiddlewaretoken', csrfToken.value);
-    
-    const apiUrl = `/api/test-code/{{ work.id }}/`;
-    console.log('Отправляем запрос на:', apiUrl);
-    
-    fetch(apiUrl, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        console.log('Ответ получен:', response.status);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+function updateEditorLang() {
+    const ext = document.getElementById('lang-select').value;
+    const hints = {
+        py: '# Python\nprint("Hello, World!")',
+        cpp: '// C++\n#include <iostream>\nint main() { std::cout << "Hello"; return 0; }',
+        c: '// C\n#include <stdio.h>\nint main() { printf("Hello"); return 0; }',
+        java: '// Java\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello");\n    }\n}',
+        js: '// JavaScript\nconsole.log("Hello, World!");',
+        cs: '// C#\nusing System;\nclass Program { static void Main() { Console.WriteLine("Hello"); } }',
+        kt: '// Kotlin\nfun main() { println("Hello, World!") }',
+        ino: '// Arduino\nvoid setup() { Serial.begin(9600); }\nvoid loop() { Serial.println("Hello"); delay(1000); }',
+    };
+    const ed = document.getElementById('inline-editor');
+    if (!ed.value.trim()) ed.value = hints[ext] || '';
+}
+
+function clearEditor() {
+    document.getElementById('inline-editor').value = '';
+}
+
+function prepareSubmit() {
+    if (activeTab !== 'editor') return true;
+    const code = document.getElementById('inline-editor').value;
+    if (!code.trim()) { alert('Напишите код перед отправкой'); return false; }
+    const ext = document.getElementById('lang-select').value;
+    const filename = 'solution.' + ext;
+    const blob = new Blob([code], {type: 'text/plain'});
+    const file = new File([blob], filename, {type: 'text/plain'});
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('code_file').files = dt.files;
+    document.getElementById('file-name').textContent = filename;
+    return true;
+}
+
+// Tab-key indent в редакторе + мобильный тулбар
+document.addEventListener('DOMContentLoaded', function() {
+    const ed = document.getElementById('inline-editor');
+    if (!ed) return;
+
+    // Tab-indent
+    ed.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const s = this.selectionStart, end = this.selectionEnd;
+            this.value = this.value.substring(0, s) + '    ' + this.value.substring(end);
+            this.selectionStart = this.selectionEnd = s + 4;
         }
-        return response.json();
-    })
-    .then(data => {
-        console.log('Данные получены:', data);
-        displayTestResults(data);
-    })
-    .catch(error => {
-        console.error('Ошибка при тестировании:', error);
-        displayTestError('Ошибка при тестировании: ' + error.message);
     });
+
+    // Мобильный тулбар — вставка символов в позицию курсора
+    var bar = document.getElementById('mobileCodeBar');
+    if (bar) {
+        bar.addEventListener('mousedown', function(e) { e.preventDefault(); }); // не снимаем фокус
+        bar.addEventListener('click', function(e) {
+            var btn = e.target.closest('.mcb-btn');
+            if (!btn) return;
+            var ins = btn.getAttribute('data-ins');
+            var s = ed.selectionStart, end = ed.selectionEnd;
+            // Для парных символов — оборачиваем выделение
+            var pairs = {'(': ')', '{': '}', '[': ']', '"': '"', "'": "'"};
+            var close = pairs[ins];
+            if (close && s !== end) {
+                ed.value = ed.value.substring(0, s) + ins + ed.value.substring(s, end) + close + ed.value.substring(end);
+                ed.selectionStart = s + 1;
+                ed.selectionEnd = end + 1;
+            } else if (close) {
+                ed.value = ed.value.substring(0, s) + ins + close + ed.value.substring(end);
+                ed.selectionStart = ed.selectionEnd = s + 1;
+            } else {
+                ed.value = ed.value.substring(0, s) + ins + ed.value.substring(end);
+                ed.selectionStart = ed.selectionEnd = s + ins.length;
+            }
+            ed.focus();
+        });
+    }
+});
+
+// ── Тестирование ────────────────────────────────────────────────────────
+function testSolution() {
+    // Определяем активную вкладку
+    const editorTab = document.getElementById('tab-editor');
+    const isEditorActive = editorTab && editorTab.style.display !== 'none';
+
+    if (isEditorActive) {
+        const editorCode = document.getElementById('inline-editor').value.trim();
+        if (!editorCode) { alert('Напишите код в редакторе'); return; }
+        showTestInputModal(editorCode);
+    } else {
+        const codeFile = document.getElementById('code_file');
+        if (!codeFile || !codeFile.files || !codeFile.files[0]) {
+            alert('Сначала выберите файл с кодом');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = e => showTestInputModal(e.target.result);
+        reader.onerror = () => alert('Ошибка чтения файла');
+        reader.readAsText(codeFile.files[0], 'utf-8');
+    }
 }
 
-function showTestModal() {
-    // Создаем модальное окно
+function showTestInputModal(codeContent) {
+    const existing = document.getElementById('testModal');
+    if (existing) existing.remove();
+
+    const workInput = {{ work_input_json|safe }};
     const modalHtml = `
         <div id="testModal" class="test-modal">
             <div class="test-modal-content">
@@ -615,151 +768,103 @@ function showTestModal() {
                     <button class="test-modal-close" onclick="closeTestModal()">&times;</button>
                 </div>
                 <div class="test-modal-body">
-                    <div class="test-loading">
+                    <div style="margin-bottom:12px">
+                        <label style="font-size:.82rem;font-weight:600;color:#6b7280;display:block;margin-bottom:6px">
+                            <i class="fas fa-keyboard"></i> Входные данные (stdin)
+                        </label>
+                        <textarea id="testStdin" style="width:100%;min-height:70px;font-family:monospace;font-size:.875rem;padding:.5rem .75rem;border:1.5px solid #e5e7eb;border-radius:8px;resize:vertical;box-sizing:border-box"
+                            placeholder="Введите входные данные для input()...">${workInput}</textarea>
+                    </div>
+                    <button onclick="runLocalTest()" style="background:#10b981;color:#fff;border:none;padding:.5rem 1.2rem;border-radius:8px;font-weight:600;cursor:pointer;margin-bottom:12px">
+                        <i class="fas fa-play"></i> Запустить тест
+                    </button>
+                    <div class="test-loading" style="display:none">
                         <div class="spinner"></div>
                         <p>Выполняется тестирование...</p>
                     </div>
-                    <div class="test-results" style="display: none;">
-                        <!-- Результаты тестирования будут здесь -->
-                    </div>
+                    <div class="test-results" style="display:none"></div>
                 </div>
             </div>
-        </div>
-    `;
-    
-    // Удаляем предыдущее модальное окно, если есть
-    const existingModal = document.getElementById('testModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // Добавляем новое модальное окно
+        </div>`;
+
+    window._pendingTestCode = codeContent;
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     testModal = document.getElementById('testModal');
+}
+
+function runLocalTest() {
+    const codeContent = window._pendingTestCode || '';
+    const loading = testModal.querySelector('.test-loading');
+    const results = testModal.querySelector('.test-results');
+    const stdinEl = document.getElementById('testStdin');
+    const stdin = stdinEl ? stdinEl.value : '';
+    const runBtn = testModal.querySelector('button[onclick^="runLocalTest"]');
+
+    loading.style.display = 'block';
+    results.style.display = 'none';
+    if (runBtn) runBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('code', codeContent);
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    if (stdin) formData.append('stdin', stdin);
+
+    fetch(`/api/test-code/{{ work.id }}/`, { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => displayTestResults(data))
+        .catch(err => displayTestError('Ошибка: ' + err.message))
+        .finally(() => {
+            loading.style.display = 'none';
+            if (runBtn) runBtn.disabled = false;
+        });
 }
 
 function displayTestResults(data) {
     const loading = testModal.querySelector('.test-loading');
     const results = testModal.querySelector('.test-results');
-    
-    loading.style.display = 'none';
+    if (loading) loading.style.display = 'none';
     results.style.display = 'block';
-    
-    let resultHtml = '';
-    
     if (data.status === 'success') {
-        const statusClass = data.test_passed ? 'test-passed' : 'test-failed';
-        const statusIcon = data.test_passed ? 'fas fa-check-circle' : 'fas fa-times-circle';
-        const statusText = data.test_passed ? 'Тест пройден!' : 'Тест не пройден';
-        
-        resultHtml = `
-            <div class="test-result ${statusClass}">
-                <div class="test-status">
-                    <i class="${statusIcon}"></i>
-                    <span>${statusText}</span>
-                </div>
-                
+        const cls = data.test_passed ? 'test-passed' : 'test-failed';
+        const icon = data.test_passed ? 'fas fa-check-circle' : 'fas fa-times-circle';
+        const label = data.test_passed ? 'Тест пройден!' : 'Тест не пройден';
+        results.innerHTML = `
+            <div class="test-result ${cls}">
+                <div class="test-status"><i class="${icon}"></i><span>${label}</span></div>
                 <div class="test-details">
-                    <div class="test-input">
-                        <strong>Входные данные:</strong>
-                        <code>${data.input}</code>
-                    </div>
-                    
-                    <div class="test-expected">
-                        <strong>Ожидаемый результат:</strong>
-                        <code>${data.expected_output}</code>
-                    </div>
-                    
-                    <div class="test-actual">
-                        <strong>Полученный результат:</strong>
-                        <code>${data.actual_output}</code>
-                    </div>
-                    
-                    ${data.error_output ? `
-                    <div class="test-errors">
-                        <strong>Ошибки:</strong>
-                        <pre>${data.error_output}</pre>
-                    </div>
-                    ` : ''}
-                    
-                    <div class="test-time">
-                        <strong>Время выполнения:</strong>
-                        <span>${data.execution_time}</span>
-                    </div>
+                    ${data.input ? `<div class="test-input"><strong>Входные данные:</strong><code>${data.input}</code></div>` : ''}
+                    <div class="test-actual"><strong>Вывод программы:</strong><pre style="margin:.25rem 0;white-space:pre-wrap">${data.actual_output || '(нет вывода)'}</pre></div>
+                    ${data.error_output ? `<div class="test-errors"><strong>Ошибки:</strong><pre>${data.error_output}</pre></div>` : ''}
+                    ${data.execution_time ? `<div class="test-time"><strong>Время:</strong> ${data.execution_time}</div>` : ''}
                 </div>
-            </div>
-        `;
+            </div>`;
     } else {
-        resultHtml = `
-            <div class="test-result test-error">
-                <div class="test-status">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span>Ошибка выполнения</span>
-                </div>
-                <div class="test-details">
-                    <div class="test-error-message">
-                        <strong>Сообщение об ошибке:</strong>
-                        <p>${data.message}</p>
-                    </div>
-                </div>
-            </div>
-        `;
+        displayTestError(data.message || data.error_output || 'Ошибка выполнения');
     }
-    
-    results.innerHTML = resultHtml;
 }
 
 function displayTestError(message) {
-    const loading = testModal.querySelector('.test-loading');
-    const results = testModal.querySelector('.test-results');
-    
-    loading.style.display = 'none';
-    results.style.display = 'block';
-    
-    results.innerHTML = `
-        <div class="test-result test-error">
-            <div class="test-status">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>Ошибка</span>
-            </div>
-            <div class="test-details">
-                <div class="test-error-message">
-                    <p>${message}</p>
-                </div>
-            </div>
-        </div>
-    `;
+    const loading = testModal ? testModal.querySelector('.test-loading') : null;
+    const results = testModal ? testModal.querySelector('.test-results') : null;
+    if (loading) loading.style.display = 'none';
+    if (results) {
+        results.style.display = 'block';
+        results.innerHTML = `
+            <div class="test-result test-error">
+                <div class="test-status"><i class="fas fa-exclamation-triangle"></i><span>Ошибка</span></div>
+                <div class="test-details"><pre style="white-space:pre-wrap;color:#991b1b">${message}</pre></div>
+            </div>`;
+    }
 }
 
 function closeTestModal() {
-    if (testModal) {
-        testModal.remove();
-        testModal = null;
-    }
+    if (testModal) { testModal.remove(); testModal = null; }
 }
 
-// Закрытие модального окна по клику вне его
 document.addEventListener('click', function(e) {
-    if (testModal && e.target === testModal) {
-        closeTestModal();
-    }
+    if (testModal && e.target === testModal) closeTestModal();
 });
 
-// Отладочная информация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Страница загружена');
-    
-    const codeFile = document.getElementById('code_file');
-    console.log('Элемент code_file найден:', codeFile);
-    
-    const testButton = document.querySelector('button[onclick="testSolution()"]');
-    console.log('Кнопка тестирования найдена:', testButton);
-    
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-    console.log('CSRF токен найден:', csrfToken);
-    
-    console.log('Work ID:', {{ work.id }});
-});
 
 function viewSolutionDetails(solutionId) {
     window.location.href = `/solution/${solutionId}/`;
@@ -783,235 +888,3 @@ document.querySelectorAll('.toggle-section').forEach(btn => {
 });
 </script>
 {% endblock %}
-        const codeContent = e.target.result;
-        runLocalTest(codeContent);
-    };
-    
-    reader.onerror = function(e) {
-        console.error('Ошибка чтения файла:', e);
-        alert('Ошибка при чтении файла');
-    };
-    
-    reader.readAsText(file, 'utf-8');
-}
-
-function runLocalTest(codeContent) {
-    console.log('runLocalTest вызвана, размер кода:', codeContent.length);
-    
-    // Показываем модальное окно с тестированием
-    showTestModal();
-    
-    // Отправляем запрос на тестирование
-    const formData = new FormData();
-    formData.append('code', codeContent);
-    
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-    if (!csrfToken) {
-        console.error('CSRF токен не найден');
-        displayTestError('Ошибка: CSRF токен не найден');
-        return;
-    }
-    
-    formData.append('csrfmiddlewaretoken', csrfToken.value);
-    
-    const apiUrl = `/api/test-code/{{ work.id }}/`;
-    console.log('Отправляем запрос на:', apiUrl);
-    
-    fetch(apiUrl, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => {
-        console.log('Ответ получен:', response.status);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        console.log('Данные получены:', data);
-        displayTestResults(data);
-    })
-    .catch(error => {
-        console.error('Ошибка при тестировании:', error);
-        displayTestError('Ошибка при тестировании: ' + error.message);
-    });
-}
-
-function showTestModal() {
-    // Создаем модальное окно
-    const modalHtml = `
-        <div id="testModal" class="test-modal">
-            <div class="test-modal-content">
-                <div class="test-modal-header">
-                    <h3><i class="fas fa-vial"></i> Локальное тестирование</h3>
-                    <button class="test-modal-close" onclick="closeTestModal()">&times;</button>
-                </div>
-                <div class="test-modal-body">
-                    <div class="test-loading">
-                        <div class="spinner"></div>
-                        <p>Выполняется тестирование...</p>
-                    </div>
-                    <div class="test-results" style="display: none;">
-                        <!-- Результаты тестирования будут здесь -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Удаляем предыдущее модальное окно, если есть
-    const existingModal = document.getElementById('testModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // Добавляем новое модальное окно
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    testModal = document.getElementById('testModal');
-}
-
-function displayTestResults(data) {
-    const loading = testModal.querySelector('.test-loading');
-    const results = testModal.querySelector('.test-results');
-    
-    loading.style.display = 'none';
-    results.style.display = 'block';
-    
-    let resultHtml = '';
-    
-    if (data.status === 'success') {
-        const statusClass = data.test_passed ? 'test-passed' : 'test-failed';
-        const statusIcon = data.test_passed ? 'fas fa-check-circle' : 'fas fa-times-circle';
-        const statusText = data.test_passed ? 'Тест пройден!' : 'Тест не пройден';
-        
-        resultHtml = `
-            <div class="test-result ${statusClass}">
-                <div class="test-status">
-                    <i class="${statusIcon}"></i>
-                    <span>${statusText}</span>
-                </div>
-                
-                <div class="test-details">
-                    <div class="test-input">
-                        <strong>Входные данные:</strong>
-                        <code>${data.input}</code>
-                    </div>
-                    
-                    <div class="test-expected">
-                        <strong>Ожидаемый результат:</strong>
-                        <code>${data.expected_output}</code>
-                    </div>
-                    
-                    <div class="test-actual">
-                        <strong>Полученный результат:</strong>
-                        <code>${data.actual_output}</code>
-                    </div>
-                    
-                    ${data.error_output ? `
-                    <div class="test-errors">
-                        <strong>Ошибки:</strong>
-                        <pre>${data.error_output}</pre>
-                    </div>
-                    ` : ''}
-                    
-                    <div class="test-time">
-                        <strong>Время выполнения:</strong>
-                        <span>${data.execution_time}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    } else {
-        resultHtml = `
-            <div class="test-result test-error">
-                <div class="test-status">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <span>Ошибка выполнения</span>
-                </div>
-                <div class="test-details">
-                    <div class="test-error-message">
-                        <strong>Сообщение об ошибке:</strong>
-                        <p>${data.message}</p>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-    
-    results.innerHTML = resultHtml;
-}
-
-function displayTestError(message) {
-    const loading = testModal.querySelector('.test-loading');
-    const results = testModal.querySelector('.test-results');
-    
-    loading.style.display = 'none';
-    results.style.display = 'block';
-    
-    results.innerHTML = `
-        <div class="test-result test-error">
-            <div class="test-status">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>Ошибка</span>
-            </div>
-            <div class="test-details">
-                <div class="test-error-message">
-                    <p>${message}</p>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function closeTestModal() {
-    if (testModal) {
-        testModal.remove();
-        testModal = null;
-    }
-}
-
-// Закрытие модального окна по клику вне его
-document.addEventListener('click', function(e) {
-    if (testModal && e.target === testModal) {
-        closeTestModal();
-    }
-});
-
-// Отладочная информация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Страница загружена');
-    
-    const codeFile = document.getElementById('code_file');
-    console.log('Элемент code_file найден:', codeFile);
-    
-    const testButton = document.querySelector('button[onclick="testSolution()"]');
-    console.log('Кнопка тестирования найдена:', testButton);
-    
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-    console.log('CSRF токен найден:', csrfToken);
-    
-    console.log('Work ID:', {{ work.id }});
-});
-
-function viewSolutionDetails(solutionId) {
-    window.location.href = `/solution/${solutionId}/`;
-}
-
-// Анимация отправки формы
-document.getElementById('solution-form').addEventListener('submit', function(e) {
-    const btn = document.getElementById('submit-btn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка...';
-    btn.disabled = true;
-});
-
-// Переключение секций
-document.querySelectorAll('.toggle-section').forEach(btn => {
-    btn.addEventListener('click', function() {
-        const content = this.closest('.content-section').querySelector('.section-content');
-        content.classList.toggle('collapsed');
-        this.querySelector('i').classList.toggle('fa-chevron-down');
-        this.querySelector('i').classList.toggle('fa-chevron-up');
-    });
-});
-</script>

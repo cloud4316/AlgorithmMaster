@@ -1,0 +1,88 @@
+{% extends 'works/base.html' %}
+{% block title %}Курсовые работы{% endblock %}
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;padding:2rem 1rem">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <h1 style="font-size:1.5rem;font-weight:700;margin:0"><i class="fas fa-graduation-cap"></i> Курсовые работы</h1>
+    <a href="{% url 'coursework_assign' %}" style="background:#667eea;color:#fff;padding:.6rem 1.2rem;border-radius:8px;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:.4rem">
+      <i class="fas fa-plus"></i> Назначить
+    </a>
+  </div>
+
+  <!-- Фильтр по предмету -->
+  <form method="get" style="margin-bottom:1.5rem;display:flex;gap:.75rem;flex-wrap:wrap;align-items:center">
+    <select name="subject" onchange="this.form.submit()"
+            style="padding:.5rem .75rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem">
+      <option value="">Все предметы</option>
+      {% for s in subjects %}
+        <option value="{{ s.id }}" {% if selected_subject == s.id|stringformat:"s" %}selected{% endif %}>{{ s.title }}</option>
+      {% endfor %}
+    </select>
+    <span style="color:#6b7280;font-size:.9rem">Всего: {{ courseworks|length }}</span>
+  </form>
+
+  {% if courseworks %}
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead>
+        <tr style="background:#f9fafb;border-bottom:2px solid #e5e7eb">
+          <th style="padding:.75rem 1rem;text-align:left;font-weight:600">Студент</th>
+          <th style="padding:.75rem 1rem;text-align:left;font-weight:600">Предмет</th>
+          <th style="padding:.75rem 1rem;text-align:left;font-weight:600">Тема</th>
+          <th style="padding:.75rem 1rem;text-align:center;font-weight:600">Статус</th>
+          <th style="padding:.75rem 1rem;text-align:center;font-weight:600">Срок</th>
+          <th style="padding:.75rem 1rem;text-align:center;font-weight:600">Оценка</th>
+          <th style="padding:.75rem 1rem;text-align:center;font-weight:600">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cw in courseworks %}
+        <tr style="border-bottom:1px solid #f3f4f6">
+          <td style="padding:.75rem 1rem;font-weight:500">{{ cw.student.last_name }} {{ cw.student.first_name }}</td>
+          <td style="padding:.75rem 1rem;color:#6b7280">{{ cw.subject.title|default:"—" }}</td>
+          <td style="padding:.75rem 1rem;max-width:280px">
+            <span title="{{ cw.description }}">{{ cw.title|truncatechars:60 }}</span>
+            <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.2rem">
+              {% if cw.subject.method_guide %}<a href="/media/{{ cw.subject.method_guide }}" target="_blank" style="font-size:.75rem;color:#667eea;text-decoration:none"><i class="fas fa-file-pdf" style="color:#ef4444"></i> Методичка</a>{% endif %}
+              {% if cw.subject.example_cw_file %}<a href="/media/{{ cw.subject.example_cw_file }}" target="_blank" style="font-size:.75rem;color:#667eea;text-decoration:none"><i class="fas fa-file-word" style="color:#2563eb"></i> Пример КП</a>{% endif %}
+            </div>
+          </td>
+          <td style="padding:.75rem 1rem;text-align:center">
+            <span style="background:{{ cw.status_color }}22;color:{{ cw.status_color }};padding:.2rem .65rem;border-radius:20px;font-size:.78rem;font-weight:600">
+              {{ cw.get_status_display }}
+            </span>
+          </td>
+          <td style="padding:.75rem 1rem;text-align:center;color:{% if cw.deadline %}{% now "Y-m-d" as today %}{% if cw.deadline|date:"Y-m-d" < today %}#ef4444{% else %}#374151{% endif %}{% else %}#9ca3af{% endif %}">
+            {{ cw.deadline|date:"d.m.Y"|default:"—" }}
+          </td>
+          <td style="padding:.75rem 1rem;text-align:center;font-weight:700;font-size:1rem">
+            {% if cw.grade %}{{ cw.grade }}{% else %}—{% endif %}
+          </td>
+          <td style="padding:.75rem 1rem;text-align:center;white-space:nowrap">
+            <a href="{% url 'coursework_edit' cw.id %}" style="color:#667eea;text-decoration:none;margin-right:.5rem" title="Редактировать">
+              <i class="fas fa-edit"></i>
+            </a>
+            <form method="post" action="{% url 'coursework_delete' cw.id %}" style="display:inline"
+                  onsubmit="return confirm('Удалить курсовую {{ cw.student.last_name }}?')">
+              {% csrf_token %}
+              <button type="submit" style="background:none;border:none;color:#ef4444;cursor:pointer" title="Удалить">
+                <i class="fas fa-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;background:#fff;border:1px solid #e5e7eb;border-radius:12px;color:#9ca3af">
+    <i class="fas fa-graduation-cap" style="font-size:2.5rem;display:block;margin-bottom:1rem"></i>
+    Курсовые работы не назначены.
+    <br><a href="{% url 'coursework_assign' %}" style="color:#667eea">Назначить первую</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

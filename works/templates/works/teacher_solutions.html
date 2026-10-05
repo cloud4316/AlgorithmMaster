@@ -68,7 +68,7 @@
 
   <div class="ts-table-wrap">
     <table class="ts-table">
-      <thead><tr><th>Студент</th><th>Группа</th><th>Работа</th><th>Статус</th><th>Оценка</th><th>Дата</th><th>Действие</th></tr></thead>
+      <thead><tr><th>Студент</th><th>Группа</th><th>Работа</th><th>Статус</th><th>Оценка</th><th>Дата</th><th>Файл</th><th>Действие</th></tr></thead>
       <tbody>
         {% for sol in page_obj %}
         <tr>
@@ -85,16 +85,26 @@
               {% else %}{{ sol.status }}{% endif %}
             </span>
           </td>
-          <td><strong>{{ sol.score|default:"—" }}</strong>{% if sol.work.max_score %}/{{ sol.work.max_score }}{% endif %}</td>
+          <td><strong>{{ sol.score_points|default:"—" }}</strong>{% if sol.work.max_score %}/{{ sol.work.max_score }}{% endif %}</td>
           <td class="td-date">{{ sol.submitted_at|date:"d.m H:i" }}</td>
           <td>
-            <button class="btn-grade-open" onclick="openGrade({{ sol.id }}, '{{ sol.work.max_score|default:100 }}', {{ sol.score|default:0 }}, '{{ sol.status }}')">
+            <a href="{% url 'solution_detail' sol.id %}" class="btn-grade-open" target="_blank" title="Просмотр" style="text-decoration:none;display:inline-flex;align-items:center">
+              <i class="fas fa-eye"></i>
+            </a>
+            {% if sol.code_file %}
+            <a href="{{ sol.code_file.url }}" class="btn-grade-open" download title="Скачать файл" style="text-decoration:none;display:inline-flex;align-items:center;margin-left:4px">
+              <i class="fas fa-download"></i>
+            </a>
+            {% endif %}
+          </td>
+          <td>
+            <button class="btn-grade-open" onclick="openGrade({{ sol.id }}, '{{ sol.work.max_score|default:100 }}', {{ sol.score_points|default:0 }}, '{{ sol.status }}')">
               <i class="fas fa-pen"></i> Оценить
             </button>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" style="text-align:center;padding:2rem;color:#9ca3af">Нет решений</td></tr>
+        <tr><td colspan="8" style="text-align:center;padding:2rem;color:#9ca3af">Нет решений</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -185,5 +195,12 @@ document.getElementById('gradeModal').addEventListener('click', function(e) {
 .grade-btns{display:flex;gap:.5rem;margin-top:.25rem}
 .btn-save{flex:1;background:#667eea;color:#fff;border:none;padding:.6rem;border-radius:8px;cursor:pointer;font-weight:600}
 .btn-cancel{background:#f3f4f6;color:#374151;border:none;padding:.6rem 1rem;border-radius:8px;cursor:pointer}
+body.dark-mode .ext-request-card{background:#1c1c1e;border-color:rgba(99,102,241,.2)}
+body.dark-mode .ext-reason-text{color:#98989d}
+body.dark-mode .grade-modal-box{background:#1c1c1e;border:1px solid rgba(255,255,255,.1)}
+body.dark-mode .grade-modal-box h3{color:#f5f5f7}
+body.dark-mode .grade-modal-box label{color:#f5f5f7}
+body.dark-mode .grade-input{background:#000000;border-color:rgba(255,255,255,.12);color:#f5f5f7}
+body.dark-mode .btn-cancel{background:#2c2c2e;color:#f5f5f7}
 </style>
 {% endblock %}

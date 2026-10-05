@@ -39,14 +39,14 @@ table {
     padding-left:  .5rem !important;
     padding-right: .5rem !important;
     padding-bottom: 1rem !important;
-    margin-top: 115px !important;   /* nav 60px + subj-row ~50px + запас 5px */
+    margin-top: 68px !important;   /* nav 60px + 8px запас */
   }
 }
 @media (max-width: 480px) {
   .main {
     padding-left:  .25rem !important;
     padding-right: .25rem !important;
-    margin-top: 112px !important;
+    margin-top: 65px !important;
   }
 }
 
@@ -132,10 +132,10 @@ body.dark-mode .warning {
 /* ─── 3. Урок теории ─────────────────────────────────────────── */
 @media (max-width: 900px) {
 
-  /* Боковая панель: открывается ниже fixed-шапки (~115px) */
+  /* Боковая панель: открывается ниже fixed-шапки (60px) */
   .lesson-sidebar {
-    top: 115px !important;
-    height: calc(100vh - 115px) !important;
+    top: 68px !important;
+    height: calc(100vh - 68px) !important;
   }
 
   /* Основная область */
@@ -502,5 +502,381 @@ body.dark-mode .warning {
     justify-content: center;
     min-height: 44px;
     font-size: .9rem;
+  }
+}
+
+/* ─── 15. Тёмная тема: мобильное меню ───────────────────────── */
+body.dark-mode #mobileNavMenu {
+  background: #1c1c1e;
+  border-top-color: rgba(255,255,255,.1);
+}
+body.dark-mode #mobileNavMenu .nav-link {
+  color: #f5f5f7;
+}
+body.dark-mode #mobileNavMenu .nav-link:hover,
+body.dark-mode #mobileNavMenu .nav-link:active {
+  background: #2c2c2e;
+}
+/* Строку предметов под шапкой скрываем — пикер уже есть в навбаре */
+@media (max-width: 900px) {
+  .subj-mobile-row { display: none !important; }
+}
+body.dark-mode .subj-mobile-row {
+  background: #1c1c1e;
+  border-bottom-color: rgba(255,255,255,.1);
+}
+
+/* ─── 16. Тест: страница вопросов ───────────────────────────── */
+@media (max-width: 768px) {
+  .quiz-page {
+    padding: 1rem .5rem !important;
+  }
+  .quiz-header h1 {
+    font-size: 1.2rem !important;
+  }
+  .quiz-info-row {
+    gap: .75rem !important;
+    font-size: .8rem !important;
+  }
+  .question-card {
+    padding: 1rem !important;
+  }
+  .choice-label {
+    padding: .6rem .75rem !important;
+    gap: .6rem !important;
+  }
+  .choice-text {
+    font-size: .88rem !important;
+  }
+  /* Таймер: сдвигаем ниже fixed-шапки на мобиле */
+  .exam-timer {
+    top: 115px !important;
+    right: .5rem !important;
+    font-size: .95rem !important;
+    padding: .5rem .75rem !important;
+  }
+  /* Строка отправки: вертикально на маленьких */
+  .quiz-submit-row {
+    flex-direction: column;
+    gap: .75rem;
+    align-items: stretch !important;
+  }
+  .quiz-submit-row > div {
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+  .btn-submit-quiz,
+  .btn-adaptive-quiz {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
+@media (max-width: 400px) {
+  .quiz-page {
+    padding: .75rem .25rem !important;
+  }
+  .question-card {
+    padding: .75rem !important;
+    border-radius: 8px !important;
+  }
+}
+
+/* ─── 17. Список тестов ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ql-page {
+    padding: 1rem .5rem !important;
+  }
+  .ql-hero {
+    flex-direction: column;
+    padding: 1rem !important;
+    gap: 1rem;
+    margin-bottom: 1.5rem !important;
+  }
+  .ql-hero-text h1 {
+    font-size: 1.2rem !important;
+  }
+  .ql-hero-stats {
+    gap: .6rem;
+  }
+  .ql-stat {
+    padding: .5rem .85rem !important;
+    min-width: 65px !important;
+  }
+  .ql-stat-num {
+    font-size: 1.2rem !important;
+  }
+  /* Заголовок блока: вертикально */
+  .ql-block-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: .75rem;
+    padding: .9rem 1rem !important;
+  }
+  .ql-block-progress {
+    width: 100%;
+  }
+  .ql-progress-track {
+    width: 100% !important;
+    flex: 1;
+  }
+  /* Карточки: 1 колонка */
+  .ql-cards {
+    grid-template-columns: 1fr !important;
+  }
+  .ql-card {
+    padding: .85rem 1rem !important;
+  }
+  .ql-card-title {
+    white-space: normal !important;
+    font-size: .85rem !important;
+  }
+}
+
+/* ─── 18. Результат теста ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .review-card {
+    padding: 1rem !important;
+    margin-bottom: .75rem;
+  }
+  .choice-item {
+    font-size: .85rem !important;
+    padding: .5rem .75rem !important;
+  }
+  .btn-outline {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    text-align: center;
+  }
+}
+
+/* ─── 19. Рейтинг ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .lb-page {
+    padding: 1rem .5rem !important;
+  }
+  .lb-header h1 {
+    font-size: 1.25rem !important;
+  }
+  /* Таблица — горизонтальный скролл уже есть, дополнительно
+     скрываем колонки "Среднее" и "Серия" на совсем узких */
+  .lb-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .lb-table th,
+  .lb-table td {
+    padding: .5rem .6rem !important;
+    font-size: .8rem !important;
+  }
+  .student-info span {
+    font-size: .8rem;
+  }
+  .avatar {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: .65rem !important;
+  }
+}
+@media (max-width: 480px) {
+  /* Скрываем менее важные колонки на телефоне */
+  .lb-table th:nth-child(6),
+  .lb-table td:nth-child(6),
+  .lb-table th:nth-child(7),
+  .lb-table td:nth-child(7) {
+    display: none;
+  }
+}
+
+/* ─── 20. Профиль ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Кнопка смены пароля */
+  div[style*="max-width:200px"] {
+    max-width: 100% !important;
+    margin: .75rem 1rem 0 !important;
+    text-align: left !important;
+  }
+  /* Достижения */
+  .ach-earned-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)) !important;
+    gap: .65rem !important;
+  }
+  .ach-locked-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
+    gap: .5rem !important;
+  }
+  /* График активности: горизонтальный скролл */
+  .activity-chart-wrap,
+  .activity {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Stat-карточки профиля: 2 колонки */
+  .stats-grid,
+  .profile-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 400px) {
+  .ach-earned-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+/* ─── 21. Уведомления ────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .notif-item {
+    padding: .85rem 1rem !important;
+  }
+  .notif-title {
+    font-size: .9rem !important;
+  }
+  .notif-msg {
+    font-size: .82rem !important;
+  }
+}
+
+/* ─── 22. Практические работы: детальная страница ────────────── */
+@media (max-width: 768px) {
+  .work-detail-layout {
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+  .work-sidebar,
+  .work-detail-sidebar {
+    width: 100% !important;
+    position: static !important;
+  }
+  .code-editor-wrap,
+  .editor-wrap {
+    min-height: 300px !important;
+  }
+  .submission-actions {
+    flex-direction: column;
+    gap: .5rem;
+  }
+  .submission-actions .btn {
+    width: 100% !important;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
+
+/* ─── 23. Адаптивный тест ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .aq-card,
+  .aq-result {
+    padding: 1.25rem 1rem !important;
+    border-radius: 10px !important;
+  }
+  .aq-q-text {
+    font-size: .95rem !important;
+  }
+  .choice-btn {
+    padding: .65rem 1rem !important;
+    font-size: .88rem !important;
+    min-height: 44px;
+  }
+}
+
+/* ─── 25. Hide-on-scroll шапка ──────────────────────────────── */
+@media (max-width: 900px) {
+  header.header {
+    position: fixed !important;
+    top: 0; left: 0; right: 0;
+    z-index: 500;
+    transition: transform .25s ease;
+    will-change: transform;
+  }
+  header.header.nav-hidden {
+    transform: translateY(-100%);
+  }
+}
+
+/* ─── 26. Мобильный тулбар кода ──────────────────────────────── */
+.mobile-code-bar {
+  display: none;
+}
+@media (max-width: 900px) {
+  .mobile-code-bar {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 6px 4px;
+    background: #f3f4f6;
+    border: 1.5px solid #e5e7eb;
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    scrollbar-width: none;
+  }
+  .mobile-code-bar::-webkit-scrollbar { display: none; }
+  body.dark-mode .mobile-code-bar {
+    background: #2a2a2e;
+    border-color: rgba(255,255,255,.1);
+  }
+  .mcb-btn {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    min-width: 36px;
+    min-height: 34px;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-family: 'Fira Code', Consolas, monospace;
+    font-size: .85rem;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .mcb-btn:active {
+    background: #667eea;
+    color: #fff;
+    border-color: #667eea;
+  }
+  body.dark-mode .mcb-btn {
+    background: #3a3a3e;
+    border-color: rgba(255,255,255,.15);
+    color: #e5e7eb;
+  }
+  body.dark-mode .mcb-btn:active {
+    background: #667eea;
+    border-color: #667eea;
+  }
+  /* textarea присоединяется к тулбару без верхнего скругления */
+  .mobile-code-bar + .inline-code-editor {
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    border-top: none !important;
+  }
+}
+
+/* ─── 24. Общие touch-улучшения ──────────────────────────────── */
+@media (max-width: 900px) {
+  /* Все интерактивные элементы — минимум 44px для пальца */
+  .btn, button, .nav-link, .group-pill, .lb-tab,
+  .ql-btn, .ql-card-action {
+    min-height: 44px;
+  }
+  /* Ссылки-кнопки */
+  a.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Текстовые поля — font-size 16px чтобы iOS не зумил */
+  input[type=text],
+  input[type=password],
+  input[type=email],
+  input[type=number],
+  textarea,
+  select {
+    font-size: 16px !important;
   }
 }

@@ -11,8 +11,9 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.contrib import messages
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.contrib.auth.password_validation import validate_password as _validate_password
 from django.core.cache import cache
 from .models import (PracticalWork, Solution, UserProgress, UserSession, PageView,
                      CodeCheck, TheoryModule, TheoryLesson, LessonProgress,
@@ -20,20 +21,39 @@ from .models import (PracticalWork, Solution, UserProgress, UserSession, PageVie
                      Notification, TeacherComment,
                      Achievement, UserAchievement, WorkHint, UserHintUnlock,
                      DeadlineExtension, Subject, Announcement,
-                     CircuitDraft, CircuitSolution, SubjectAccess)
+                     CircuitDraft, CircuitSolution, SubjectAccess, StudentProject,
+                     CourseWork, PyGridScore, ReviewRequest)
 from .code_runner import run_python_code, run_java_code, run_cpp_code, run_javascript_code
 from .ai_checker import AICodeChecker
 from .forms import SolutionForm, RegistrationForm, FullNameLoginForm, generate_username
 from .utils import fix_file_encoding, save_file_with_correct_encoding
+from .group_utils import normalize_group
 from datetime import timedelta, datetime, date
 
 logger = logging.getLogger('works')
 
 
+def _safe_json(value):
+    """json.dumps с экранированием </script> для вставки в HTML-страницы."""
+    return json.dumps(value, ensure_ascii=False).replace('</', '<\\/')
+
+
 def _read_solution_code(solution) -> str:
-    """Читает текст кода из файла решения."""
+    """Читает текст из файла решения (код или .docx/.pdf)."""
+    import os
     try:
-        return fix_file_encoding(solution.code_file.path)
+        path = solution.code_file.path
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ('.docx', '.doc'):
+            try:
+                import docx
+                doc = docx.Document(path)
+                return '\n'.join(p.text for p in doc.paragraphs)
+            except Exception:
+                return '[Word-документ — установите python-docx для предпросмотра]'
+        if ext == '.pdf':
+            return '[PDF-файл — скачайте для просмотра]'
+        return fix_file_encoding(path)
     except Exception:
         try:
             with solution.code_file.open('rb') as f:
@@ -63,14 +83,21 @@ def _notify_email(user, subject, body):
 # ── Достижения ────────────────────────────────────────────────────────────────
 
 _ACHIEVEMENT_DEFS = [
-    ('first_solve',     '⭐', 'Первый шаг',        'Сдай первое задание правильно',              10),
-    ('five_solves',     '🔥', 'В ударе',            'Реши 5 заданий правильно',                   25),
-    ('ten_solves',      '🏆', 'Практик',            'Реши 10 заданий правильно',                  50),
-    ('theory_start',    '📚', 'Теоретик',           'Изучи первый урок теории',                   5),
-    ('theory_ten',      '🧠', 'Знаток теории',      'Изучи 10 уроков теории',                     30),
-    ('streak_3',        '⚡', 'Серия × 3',          'Заходи 3 дня подряд',                        15),
-    ('streak_7',        '🚀', 'Недельная серия',    'Заходи 7 дней подряд',                       40),
-    ('perfect_score',   '🎯', 'Перфекционист',      'Получи максимальный балл за задание',        20),
+    ('first_solve',      '⭐', 'Первый шаг',         'Сдай первое задание правильно',              10),
+    ('five_solves',      '🔥', 'В ударе',             'Реши 5 заданий правильно',                   25),
+    ('ten_solves',       '🏆', 'Практик',             'Реши 10 заданий правильно',                  50),
+    ('twenty_solves',    '💪', 'Мастер решений',      'Реши 20 заданий правильно',                  80),
+    ('theory_start',     '📚', 'Теоретик',            'Изучи первый урок теории',                   5),
+    ('theory_ten',       '🧠', 'Знаток теории',       'Изучи 10 уроков теории',                     30),
+    ('theory_fifty',     '🎓', 'Эрудит',              'Изучи 50 уроков теории',                     100),
+    ('streak_3',         '⚡', 'Серия × 3',           'Заходи 3 дня подряд',                        15),
+    ('streak_7',         '🚀', 'Недельная серия',     'Заходи 7 дней подряд',                       40),
+    ('streak_14',        '🌟', 'Двухнедельная серия', 'Заходи 14 дней подряд',                      75),
+    ('perfect_score',    '🎯', 'Перфекционист',       'Получи максимальный балл за задание',        20),
+    ('quiz_first',       '❓', 'Первый тест',         'Пройди первый тест по теории',               10),
+    ('quiz_master',      '🧩', 'Мастер тестов',       'Пройди 10 тестов по теории',                 40),
+    ('speed_solver',     '⏱', 'Скоростной',          'Сдай задание в первый день публикации',       15),
+    ('project_creator',  '🛠', 'Проектировщик',       'Создай и сохрани личный проект',              10),
 ]
 
 def _ensure_achievements():
@@ -90,29 +117,39 @@ def check_achievements(user):
             return
         correct_count = Solution.objects.filter(student=user, status='correct').count()
         theory_count  = LessonProgress.objects.filter(user=user, completed=True).count()
+        quiz_count    = QuizAttempt.objects.filter(user=user, passed=True).count()
         has_perfect   = Solution.objects.filter(
             student=user, status='correct'
         ).filter(score__gte=F('work__max_score')).exists()
+        has_project   = StudentProject.objects.filter(student=user).exists()
 
         conditions = {
-            'first_solve':   correct_count >= 1,
-            'five_solves':   correct_count >= 5,
-            'ten_solves':    correct_count >= 10,
-            'theory_start':  theory_count  >= 1,
-            'theory_ten':    theory_count  >= 10,
-            'streak_3':      progress.streak_days >= 3,
-            'streak_7':      progress.streak_days >= 7,
-            'perfect_score': has_perfect,
+            'first_solve':     correct_count >= 1,
+            'five_solves':     correct_count >= 5,
+            'ten_solves':      correct_count >= 10,
+            'twenty_solves':   correct_count >= 20,
+            'theory_start':    theory_count  >= 1,
+            'theory_ten':      theory_count  >= 10,
+            'theory_fifty':    theory_count  >= 50,
+            'streak_3':        progress.streak_days >= 3,
+            'streak_7':        progress.streak_days >= 7,
+            'streak_14':       progress.streak_days >= 14,
+            'perfect_score':   has_perfect,
+            'quiz_first':      quiz_count >= 1,
+            'quiz_master':     quiz_count >= 10,
+            'project_creator': has_project,
         }
         existing = set(
             UserAchievement.objects.filter(user=user)
             .values_list('achievement__key', flat=True)
         )
+        xp_gained = 0
         for key, met in conditions.items():
             if met and key not in existing:
                 try:
                     ach = Achievement.objects.get(key=key)
                     UserAchievement.objects.create(user=user, achievement=ach)
+                    xp_gained += ach.xp_reward
                     Notification.send(
                         user=user,
                         n_type='info',
@@ -121,8 +158,39 @@ def check_achievements(user):
                     )
                 except Achievement.DoesNotExist:
                     pass
+        if xp_gained and progress:
+            progress.current_xp = (progress.current_xp or 0) + xp_gained
+            while progress.current_xp >= progress.next_level_xp:
+                progress.current_xp -= progress.next_level_xp
+                progress.level += 1
+                progress.next_level_xp = int(progress.next_level_xp * 1.5)
+            progress.save(update_fields=['current_xp', 'level', 'next_level_xp'])
     except Exception:
         pass  # Не ломаем основной поток
+
+
+def _sync_user_progress(user):
+    """Пересчитать total_score, completed_works для пользователя из реальных данных."""
+    try:
+        progress, _ = UserProgress.objects.get_or_create(user=user)
+        completed_works = Solution.objects.filter(
+            student=user, status__in=['correct', 'partially_correct']
+        ).values('work').distinct().count()
+        practice_score = Solution.objects.filter(student=user).aggregate(Sum('score'))['score__sum'] or 0
+        # Лучшие результаты тестов: score% / 10 = очки (100% = 10 очков)
+        best_per_quiz = (
+            QuizAttempt.objects.filter(user=user)
+            .values('quiz_id')
+            .annotate(best=Max('score'))
+        )
+        quiz_score = sum(round(r['best'] / 10) for r in best_per_quiz)
+        progress.total_works = PracticalWork.objects.filter(is_active=True).count()
+        progress.completed_works = completed_works
+        progress.total_score = practice_score + quiz_score
+        progress.average_score = practice_score / completed_works if completed_works > 0 else 0
+        progress.save(update_fields=['total_works', 'completed_works', 'total_score', 'average_score'])
+    except Exception:
+        pass
 
 
 def _active_announcements(request):
@@ -159,14 +227,11 @@ def home(request):  # Публичная страница — @login_required н
         ).values('work').distinct().count()
         total_score = Solution.objects.filter(student=request.user).aggregate(Sum('score'))['score__sum'] or 0
 
-        progress, created = UserProgress.objects.get_or_create(user=request.user)
-        progress.total_works = PracticalWork.objects.filter(is_active=True).count()  # общий счётчик
-        progress.completed_works = Solution.objects.filter(
-            student=request.user, status__in=['correct', 'partially_correct']
-        ).values('work').distinct().count()
-        progress.total_score = total_score
-        progress.average_score = total_score / progress.completed_works if progress.completed_works > 0 else 0
-        progress.save()
+        _sync_user_progress(request.user)
+        progress = UserProgress.objects.get(user=request.user)
+        progress.streak_days = _calculate_streak_days(request.user)
+        progress.save(update_fields=['streak_days'])
+        check_achievements(request.user)
 
         # Реальные счётчики по предмету для быстрых действий
         subj_modules = TheoryModule.objects.filter(is_active=True, subject=current_subject)
@@ -211,7 +276,7 @@ def register(request):
             # Сохраняем группу в профиле
             progress = UserProgress.objects.create(user=user)
             if d.get('group'):
-                progress.group = d['group']
+                progress.group = normalize_group(d['group'])
                 progress.save()
             messages.success(request, 'Заявка отправлена')
             return render(request, 'works/pending_approval.html', {
@@ -265,7 +330,9 @@ def custom_login(request):
         else:
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
             next_url = request.GET.get('next', '')
-            return redirect(next_url if next_url else 'home')
+            if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                return redirect(next_url)
+            return redirect('home')
 
     return render(request, 'works/login.html', {
         'form': form,
@@ -274,6 +341,35 @@ def custom_login(request):
 
 
 # ── Панель преподавателя ────────────────────────────────────────────────────
+
+GROUP_SUBJECT_MAP = [
+    # (substring_upper, [slugs])
+    ('ИСП',  ['python']),
+    ('ССА',  ['python']),
+    ('РЭУ',  ['mcu', 'rves']),
+]
+
+def _subjects_for_group(group: str):
+    """Вернуть QuerySet Subject по названию группы (автоопределение)."""
+    group_up = group.upper()
+    slugs = []
+    for keyword, kw_slugs in GROUP_SUBJECT_MAP:
+        if keyword in group_up:
+            slugs.extend(kw_slugs)
+    if slugs:
+        return Subject.objects.filter(slug__in=slugs)
+    return Subject.objects.none()
+
+
+def _assign_subjects_by_group(user):
+    """Назначить SubjectAccess студенту по его группе (если не назначены вручную)."""
+    progress = getattr(user, 'userprogress', None)
+    if not progress or not progress.group:
+        return
+    subjects = _subjects_for_group(progress.group)
+    for subj in subjects:
+        SubjectAccess.objects.get_or_create(user=user, subject=subj, defaults={'role': 'student'})
+
 
 def _staff_required(view_func):
     """Декоратор: только для is_staff пользователей."""
@@ -293,20 +389,85 @@ def _staff_required(view_func):
 def admin_panel(request):
     """Панель преподавателя: управление регистрациями студентов."""
     pending  = User.objects.filter(is_active=False, is_staff=False).order_by('last_name', 'first_name')
-    approved = User.objects.filter(is_active=True,  is_staff=False).order_by('last_name', 'first_name').prefetch_related('subject_accesses__subject')
+    # list() — фиксируем объекты, чтобы шаблон не переоценивал queryset
+    approved = list(
+        User.objects.filter(is_active=True, is_staff=False)
+        .order_by('last_name', 'first_name')
+        .prefetch_related('subject_accesses__subject')
+    )
+    approved_ids = [u.id for u in approved]
 
-    # Прогресс для одобренных
     progress_map = {
         p.user_id: p
-        for p in UserProgress.objects.filter(user__in=approved).select_related('user')
+        for p in UserProgress.objects.filter(user_id__in=approved_ids).select_related('user')
     }
+
+    # Практика: только решённые (correct/partially_correct), сумма баллов
+    practice_stats = (
+        Solution.objects.filter(
+            student_id__in=approved_ids,
+            status__in=['correct', 'partially_correct'],
+        )
+        .values('student_id')
+        .annotate(total_score=Sum('score'), solved=Count('work', distinct=True))
+    )
+    practice_map = {r['student_id']: r for r in practice_stats}
+
+    # Тесты: лучшая попытка по каждому тесту → среднее
+    best_per_quiz = (
+        QuizAttempt.objects.filter(user_id__in=approved_ids)
+        .values('user_id', 'quiz_id')
+        .annotate(best=Max('score'))
+    )
+    quiz_totals: dict[int, int] = {}
+    quiz_counts: dict[int, int] = {}
+    for r in best_per_quiz:
+        uid = r['user_id']
+        quiz_totals[uid] = quiz_totals.get(uid, 0) + r['best']
+        quiz_counts[uid] = quiz_counts.get(uid, 0) + 1
+
+    # Кол-во работ/тестов по каждому предмету
+    works_per_subject: dict[int, int] = {}
+    for row in PracticalWork.objects.filter(is_active=True).values('subject_id').annotate(cnt=Count('id')):
+        if row['subject_id']:
+            works_per_subject[row['subject_id']] = row['cnt']
+
+    quizzes_per_subject: dict[int, int] = {}
+    for row in Quiz.objects.filter(is_active=True).values('module__subject_id').annotate(cnt=Count('id')):
+        if row['module__subject_id']:
+            quizzes_per_subject[row['module__subject_id']] = row['cnt']
+
+    # Подозрительные попытки тестов
+    suspicious_map = {
+        r['user_id']: r['cnt']
+        for r in QuizAttempt.objects.filter(user_id__in=approved_ids, suspicious=True)
+        .values('user_id').annotate(cnt=Count('id'))
+    }
+
     for u in approved:
         u.progress = progress_map.get(u.id)
+        p = practice_map.get(u.id, {})
+        u.practice_solved = p.get('solved') or 0
+        total_sc = p.get('total_score') or 0
+        u.practice_avg = round(total_sc / u.practice_solved, 1) if u.practice_solved else None
+        cnt = quiz_counts.get(u.id, 0)
+        u.quiz_solved = cnt
+        u.quiz_avg = round(quiz_totals.get(u.id, 0) / cnt, 1) if cnt else None
+        # Считаем total по предметам студента
+        sids = {sa.subject_id for sa in u.subject_accesses.all()}
+        u.total_works   = sum(works_per_subject.get(s, 0) for s in sids)
+        u.total_quizzes = sum(quizzes_per_subject.get(s, 0) for s in sids)
+        u.suspicious_attempts = suspicious_map.get(u.id, 0)
 
+    all_groups = list(
+        UserProgress.objects.filter(group__gt='').values_list('group', flat=True)
+        .distinct().order_by('group')
+    )
     return render(request, 'works/admin_panel.html', {
-        'pending':      pending,
-        'approved':     approved,
-        'all_subjects': Subject.objects.filter(is_active=True).order_by('order'),
+        'pending':        pending,
+        'approved':       approved,
+        'all_subjects':   Subject.objects.filter(is_active=True).order_by('order'),
+        'all_groups':     all_groups,
     })
 
 
@@ -318,6 +479,7 @@ def approve_user(request, user_id):
     user.is_active = True
     user.save()
     UserProgress.objects.get_or_create(user=user)
+    _assign_subjects_by_group(user)
     Notification.send(
         user=user, n_type='approved',
         title='Регистрация одобрена!',
@@ -374,7 +536,15 @@ def create_user(request):
             error = 'Пароль должен быть не менее 6 символов'
         else:
             from .forms import generate_username
+            from django.contrib.auth.password_validation import ValidationError as _PwdValidationError
             username = generate_username(last_name, first_name)
+            # Временный объект для валидаторов (без сохранения в БД)
+            _tmp_user = User(username=username, first_name=first_name, last_name=last_name)
+            try:
+                _validate_password(password, _tmp_user)
+            except _PwdValidationError as _e:
+                error = ' '.join(_e.messages)
+                return render(request, 'works/create_user.html', {'subjects': subjects, 'error': error})
             new_user = User.objects.create_user(
                 username=username,
                 password=password,
@@ -385,7 +555,7 @@ def create_user(request):
             )
             progress = UserProgress.objects.create(
                 user=new_user,
-                group=group,
+                group=normalize_group(group),
                 must_change_password=True,  # пользователь должен сменить стандартный пароль
             )
             # Назначить доступ к предметам
@@ -398,6 +568,9 @@ def create_user(request):
                     )
                 except (Subject.DoesNotExist, ValueError):
                     pass
+            # Если предметы не выбраны вручную — автоопределить по группе
+            if not subject_ids and group and role == 'student':
+                _assign_subjects_by_group(new_user)
             messages.success(request, f'Аккаунт {last_name} {first_name} создан. Логин: {username}')
             return redirect('admin_panel')
 
@@ -430,6 +603,31 @@ def set_subject_access(request, user_id):
 
 @_staff_required
 @require_http_methods(['POST'])
+def bulk_subject_access(request):
+    """Назначить доступ к предметам сразу всей группе."""
+    group   = request.POST.get('group', '').strip()
+    subject_ids = request.POST.getlist('subject_ids')
+    role    = request.POST.get('role', 'student')
+    if not group or not subject_ids:
+        messages.error(request, 'Укажите группу и хотя бы один предмет.')
+        return redirect('admin_panel')
+    subjects = list(Subject.objects.filter(id__in=[int(s) for s in subject_ids if s.isdigit()]))
+    users_in_group = User.objects.filter(
+        is_active=True, is_staff=False,
+        userprogress__group=group,
+    )
+    count = 0
+    for u in users_in_group:
+        SubjectAccess.objects.filter(user=u).delete()
+        for subj in subjects:
+            SubjectAccess.objects.create(user=u, subject=subj, role=role)
+        count += 1
+    messages.success(request, f'Группе {group}: назначено {len(subjects)} предм. для {count} студентов.')
+    return redirect('admin_panel')
+
+
+@_staff_required
+@require_http_methods(['POST'])
 def reset_password(request, user_id):
     """Сбросить пароль пользователя на заданный администратором."""
     user = get_object_or_404(User, id=user_id, is_staff=False)
@@ -437,10 +635,61 @@ def reset_password(request, user_id):
     if len(new_pw) < 6:
         messages.error(request, 'Пароль должен быть не менее 6 символов')
         return redirect('admin_panel')
+    try:
+        _validate_password(new_pw, user)
+    except Exception as _e:
+        messages.error(request, ' '.join(_e.messages) if hasattr(_e, 'messages') else str(_e))
+        return redirect('admin_panel')
     user.set_password(new_pw)
     user.save()
     UserProgress.objects.filter(user=user).update(must_change_password=True)
     messages.success(request, f'Пароль {user.last_name} {user.first_name} сброшен.')
+    return redirect('admin_panel')
+
+
+@_staff_required
+@require_http_methods(['POST'])
+def reset_student_account(request, user_id):
+    """Обнуляет прогресс студента: тесты, решения, очки, стрик."""
+    from works.models import QuizAttempt, Solution, UserProgress, CodeCheck
+    user = get_object_or_404(User, id=user_id, is_staff=False)
+    what = request.POST.getlist('what')  # ['quizzes','solutions','progress']
+
+    deleted = []
+    if 'quizzes' in what:
+        n, _ = QuizAttempt.objects.filter(user=user).delete()
+        deleted.append(f'тестов: {n}')
+    if 'solutions' in what:
+        # удаляем CodeCheck привязанные к решениям студента
+        CodeCheck.objects.filter(solution__student=user).delete()
+        n, _ = Solution.objects.filter(student=user).delete()
+        deleted.append(f'решений: {n}')
+    if 'progress' in what or ('quizzes' in what and 'solutions' in what):
+        UserProgress.objects.filter(user=user).update(
+            total_score=0, level=1, streak_days=0,
+        )
+        deleted.append('прогресс обнулён')
+
+    logger.warning('ADMIN RESET: %s обнулил аккаунт %s: %s',
+                   request.user.username, user.username, ', '.join(deleted))
+    messages.success(request, f'Аккаунт {user.last_name} {user.first_name} сброшен: {", ".join(deleted)}.')
+    return redirect('admin_panel')
+
+
+@_staff_required
+@require_http_methods(['POST'])
+def rename_user(request, user_id):
+    user = get_object_or_404(User, id=user_id, is_staff=False)
+    first_name = request.POST.get('first_name', '').strip()
+    last_name  = request.POST.get('last_name',  '').strip()
+    if not first_name or not last_name:
+        messages.error(request, 'Имя и фамилия не могут быть пустыми.')
+        return redirect('admin_panel')
+    old_name = f'{user.last_name} {user.first_name}'
+    user.first_name = first_name
+    user.last_name  = last_name
+    user.save(update_fields=['first_name', 'last_name'])
+    messages.success(request, f'Переименован: {old_name} → {user.last_name} {user.first_name}')
     return redirect('admin_panel')
 
 
@@ -486,7 +735,7 @@ def work_list(request):
 	elif is_tablet:
 		items_per_page = 9
 	else:
-		items_per_page = 12
+		items_per_page = 15
 	requested_items = request.GET.get('items_per_page')
 	if requested_items and requested_items.isdigit():
 		items_per_page = min(int(requested_items), 24)
@@ -591,12 +840,24 @@ def work_detail(request, work_id):
 				student=request.user, work=work
 			).count() + 1
 			solution.save()
-			try:
-				file_path = solution.code_file.path
-				corrected_content = fix_file_encoding(file_path)
-				save_file_with_correct_encoding(file_path, corrected_content)
-			except Exception as e:
-				print(f"Ошибка исправления кодировки: {e}")
+			_fix_encoding_if_text(solution.code_file.path)
+			# Автозапуск AI-чекера для docx/pdf
+			_ext = os.path.splitext(solution.code_file.path)[1].lower()
+			if _ext in ('.docx', '.pdf', '.doc'):
+				import threading
+				from works.models import CodeCheck
+				from works.ai_checker import AICodeChecker
+				from django.utils import timezone as _tz
+				_cc = CodeCheck.objects.create(
+					solution=solution, status='in_progress',
+					check_type='auto', created_at=_tz.now()
+				)
+				def _run_doc_check(_sid, _cid):
+					try:
+						AICodeChecker().check_solution(_sid, _cid)
+					except Exception:
+						pass
+				threading.Thread(target=_run_doc_check, args=(solution.id, _cc.id), daemon=True).start()
 			messages.success(request, 'Решение отправлено')
 			return redirect('solution_detail', solution_id=solution.id)
 	else:
@@ -615,11 +876,12 @@ def work_detail(request, work_id):
 		'work': work, 'form': form, 'solutions': user_solutions,
 		'best_solution': best_solution,
 		'total_attempts': user_solutions.count(),
-		'successful_attempts': user_solutions.filter(status__in=['correct', 'practically_correct']).count(),
+		'successful_attempts': user_solutions.filter(status__in=['correct', 'partially_correct']).count(),
 		'now': timezone.now(),
 		'user_extension': user_extension,
 		'theory_module': theory_module,
 		'module_works': module_works,
+		'work_input_json': _safe_json(work.input_example or ''),
 	})
 
 
@@ -639,12 +901,7 @@ def submission(request, work_id):
 			student=request.user, work=work
 		).count() + 1
 		solution.save()
-		try:
-			file_path = solution.code_file.path
-			corrected_content = fix_file_encoding(file_path)
-			save_file_with_correct_encoding(file_path, corrected_content)
-		except Exception as e:
-			print(f"Ошибка исправления кодировки: {e}")
+		_fix_encoding_if_text(solution.code_file.path)
 		messages.success(request, 'Решение отправлено')
 		return render(request, 'works/submission.html', {'work': work, 'submission': solution})
 	else:
@@ -652,18 +909,41 @@ def submission(request, work_id):
 		return redirect('work_detail', work_id=work_id)
 
 
-def _calculate_streak_days(user):
-    """Вычисляет количество дней подряд с активностью пользователя."""
+_BINARY_EXTS = {'.docx', '.doc', '.pdf', '.xlsx', '.xls', '.zip', '.png', '.jpg', '.jpeg'}
+
+def _fix_encoding_if_text(file_path: str) -> None:
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext in _BINARY_EXTS:
+        return
+    try:
+        corrected = fix_file_encoding(file_path)
+        save_file_with_correct_encoding(file_path, corrected)
+    except Exception as e:
+        print(f"Ошибка исправления кодировки: {e}")
+
+
+def _calculate_streak_days(user, max_days=365):
+    """Дни подряд: считается любой визит (UserSession) или сдача решения.
+    Делаем два запроса вместо 2*N — получаем набор дат за max_days и идём по ним."""
     today = timezone.now().date()
+    cutoff = today - timedelta(days=max_days)
+
+    active_dates = set()
+    active_dates.update(
+        UserSession.objects.filter(user=user, start_time__date__gte=cutoff)
+        .values_list('start_time__date', flat=True)
+    )
+    active_dates.update(
+        Solution.objects.filter(student=user, submitted_at__date__gte=cutoff)
+        .values_list('submitted_at__date', flat=True)
+    )
+
     streak = 0
     check_date = today
-    while True:
-        has_activity = Solution.objects.filter(student=user, submitted_at__date=check_date).exists()
-        if not has_activity:
-            if check_date == today:
-                check_date -= timedelta(days=1)
-                continue
-            break
+    # Если сегодня активности нет — начинаем со вчера
+    if check_date not in active_dates:
+        check_date -= timedelta(days=1)
+    while check_date in active_dates:
         streak += 1
         check_date -= timedelta(days=1)
     return streak
@@ -672,21 +952,16 @@ def _calculate_streak_days(user):
 @login_required
 def profile(request):
     user = request.user
-    progress, created = UserProgress.objects.get_or_create(user=user)
+    _sync_user_progress(user)
     solutions = Solution.objects.filter(student=user)
     total_attempts = solutions.count()
     successful_attempts = solutions.filter(status__in=['correct', 'partially_correct']).count()
-    recent_solutions = solutions.order_by('-submitted_at')[:10]
-    total_works = PracticalWork.objects.filter(is_active=True).count()
-    completed_works = solutions.filter(status__in=['correct', 'partially_correct']).values('work').distinct().count()
-    total_score = solutions.aggregate(Sum('score'))['score__sum'] or 0
-    progress.total_works = total_works
-    progress.completed_works = completed_works
-    progress.total_score = total_score
-    progress.average_score = total_score / completed_works if completed_works > 0 else 0
-    # ИСПРАВЛЕНО: streak_days вычисляется по реальным данным
+    recent_solutions = solutions.select_related('work').order_by('-submitted_at')[:20]
+    progress = UserProgress.objects.get(user=user)
     progress.streak_days = _calculate_streak_days(user)
-    progress.save()
+    progress.save(update_fields=['streak_days'])
+    total_works = progress.total_works
+    completed_works = progress.completed_works
     raw_activity = []
     for i in range(6, -1, -1):
         day_dt = timezone.now() - timedelta(days=i)
@@ -733,6 +1008,59 @@ def profile(request):
         'user_achievements': user_achievements,
         'all_achievements': all_achievements,
         'earned_keys': earned_keys,
+        'course_works': CourseWork.objects.filter(student=user).select_related('subject').order_by('-assigned_at'),
+    })
+
+
+@login_required
+def student_profile(request, user_id):
+    if not request.user.is_staff:
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
+    student = get_object_or_404(User, id=user_id, is_staff=False)
+    solutions = Solution.objects.filter(student=student).select_related('work').order_by('-submitted_at')
+    quiz_attempts = QuizAttempt.objects.filter(user=student).select_related('quiz').order_by('-created_at')
+
+    total_solutions = solutions.count()
+    correct_solutions = solutions.filter(status__in=['correct', 'partially_correct']).count()
+    total_score = solutions.aggregate(Sum('score'))['score__sum'] or 0
+    quizzes_passed = quiz_attempts.filter(passed=True).count()
+
+    def fmt_time(secs):
+        if not secs:
+            return None
+        secs = int(secs)
+        m, s = divmod(secs, 60)
+        return f"{m}м {s:02d}с" if m else f"{s}с"
+
+    raw_best = (
+        QuizAttempt.objects.filter(user=student)
+        .values('quiz__id', 'quiz__title')
+        .annotate(best_score=Max('score'), attempts=Count('id'), avg_time=Avg('time_spent_seconds'))
+        .order_by('quiz__title')
+    )
+    best_per_quiz = [
+        {**row, 'avg_time_fmt': fmt_time(row['avg_time'])}
+        for row in raw_best
+    ]
+
+    try:
+        progress = UserProgress.objects.get(user=student)
+    except UserProgress.DoesNotExist:
+        progress = None
+
+    return render(request, 'works/student_profile.html', {
+        'student': student,
+        'solutions': solutions,
+        'quiz_attempts': quiz_attempts,
+        'best_per_quiz': best_per_quiz,
+        'total_solutions': total_solutions,
+        'correct_solutions': correct_solutions,
+        'total_score': total_score,
+        'quizzes_passed': quizzes_passed,
+        'progress': progress,
+        'success_rate': round(correct_solutions * 100 / total_solutions) if total_solutions else 0,
+        'course_works': CourseWork.objects.filter(student=student).select_related('subject').order_by('-assigned_at'),
     })
 
 
@@ -751,8 +1079,6 @@ def get_session_time(request):
         today_end = timezone.now().replace(hour=23, minute=59, second=59, microsecond=999999)
         today_sessions = UserSession.objects.filter(user=request.user, start_time__gte=today_start, start_time__lte=today_end)
         total_today_seconds = sum(session.duration_seconds for session in today_sessions)
-        if active_session.is_active:
-            total_today_seconds += int((timezone.now() - active_session.start_time).total_seconds())
         hours = total_today_seconds // 3600
         minutes = (total_today_seconds % 3600) // 60
         seconds = total_today_seconds % 60
@@ -781,8 +1107,6 @@ def get_activity_data(request):
             day_sessions = UserSession.objects.filter(user=request.user, start_time__gte=day_start, start_time__lte=day_end)
             total_seconds = sum(session.duration_seconds for session in day_sessions)
             count = day_sessions.count()
-            if current_date == timezone.now().date() and active_session and active_session.is_active:
-                total_seconds += int((timezone.now() - active_session.start_time).total_seconds())
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
             height = min((total_seconds / (8 * 3600)) * 100, 100)
@@ -796,10 +1120,17 @@ def get_activity_data(request):
 @require_http_methods(["POST"])
 def check_code(request, solution_id):
     try:
-        solution = Solution.objects.get(id=solution_id, student=request.user)
+        if request.user.is_staff:
+            solution = Solution.objects.get(id=solution_id)
+        else:
+            solution = Solution.objects.get(id=solution_id, student=request.user)
         check_type = request.POST.get('check_type', 'auto')
-        # ИСПРАВЛЕНО: CodeCheck создаётся только здесь и передаётся в check_solution,
-        # чтобы не было двойного создания записи
+        # Защита от двойного клика: если уже есть in_progress — возвращаем его
+        existing = CodeCheck.objects.filter(
+            solution=solution, status='in_progress'
+        ).order_by('-created_at').first()
+        if existing:
+            return JsonResponse({'status': 'success', 'check_id': existing.id, 'message': 'Проверка уже запущена'})
         code_check = CodeCheck.objects.create(
             solution=solution, status='in_progress',
             check_type=check_type, created_at=timezone.now()
@@ -815,7 +1146,8 @@ def check_code(request, solution_id):
     except Solution.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Решение не найдено'})
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': f'Ошибка: {str(e)}'})
+        logger.exception('check_code internal error')
+        return JsonResponse({'status': 'error', 'message': 'Внутренняя ошибка сервера'})
 
 
 @login_required
@@ -823,8 +1155,8 @@ def check_code(request, solution_id):
 def get_check_status(request, check_id):
     try:
         code_check = CodeCheck.objects.get(id=check_id)
-        if code_check.solution.student != request.user:
-            return JsonResponse({'status': 'error', 'message': 'У вас нет доступа к этой проверке'})
+        if code_check.solution.student != request.user and not request.user.is_staff:
+            return JsonResponse({'status': 'error', 'message': 'У вас нет доступа к этой проверке'}, status=403)
         response_data = {
             'status': 'success', 'check_status': code_check.status,
             'score': code_check.score, 'feedback': code_check.feedback,
@@ -834,7 +1166,8 @@ def get_check_status(request, check_id):
             response_data['completed_at'] = code_check.completed_at.isoformat()
         return JsonResponse(response_data)
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': f'Ошибка: {str(e)}'})
+        logger.exception('get_check_status internal error')
+        return JsonResponse({'status': 'error', 'message': 'Внутренняя ошибка сервера'})
 
 
 @login_required
@@ -846,8 +1179,9 @@ def test_code_locally(request, work_id):
         if not code_content:
             return JsonResponse({'status': 'error', 'message': 'Код не предоставлен'})
         language = work.language.lower() if work.language else 'python'
-        input_data = work.input_example or None
-        expected_output = (work.output_example or '').strip()
+        custom_stdin = request.POST.get('stdin', '').strip()
+        input_data = custom_stdin if custom_stdin else (work.input_example or None)
+        expected_output = (work.output_example or '').strip() if not custom_stdin else ''
         # ИСПРАВЛЕНО: раньше код записывался во временный файл и путь передавался
         # в run_python_code(file_path, work) — конфликт сигнатур с code_runner.
         # Теперь передаём строку с кодом напрямую в функции из code_runner.
@@ -866,7 +1200,7 @@ def test_code_locally(request, work_id):
             test_passed = (actual_output == expected_output) if expected_output else True
             return JsonResponse({
                 'status': 'success', 'test_passed': test_passed,
-                'input': input_data or '', 'expected_output': expected_output,
+                'input': input_data or '',
                 'actual_output': actual_output, 'error_output': '',
                 'execution_time': '< 1 сек',
                 'message': 'Тест пройден!' if test_passed else 'Тест не пройден'
@@ -921,11 +1255,31 @@ def solution_detail(request, solution_id):
     if solution.student_id != request.user.id and not request.user.is_staff:
         return redirect('home')
     code = _read_solution_code(solution)
+    user_solutions = Solution.objects.filter(student=solution.student, work=solution.work)
+    best = user_solutions.order_by('-score').first()
+    avg_score = user_solutions.aggregate(avg=Avg('score'))['avg'] or 0
+    max_score = solution.work.max_score or 10
+    # score is stored as percentage (0-100), convert to actual points
+    user_best_score = round((best.score or 0) * max_score / 100) if best else 0
+    user_avg_score = round(avg_score * max_score / 100, 1)
+    ext = os.path.splitext(solution.code_file.name)[1].lower()
+    is_doc_file = ext in {'.docx', '.doc', '.pdf'}
+    if is_doc_file and solution.status == 'incorrect':
+        solution.status = 'submitted'
+        solution.save(update_fields=['status'])
+    from works.models import CodeCheck
+    last_check = CodeCheck.objects.filter(solution=solution).order_by('-created_at').first()
     return render(request, 'works/solution_detail.html', {
         'solution': solution,
         'solution_code': code,
+        'solution_code_json': _safe_json(code or ''),
         'solution_code_lines': code.splitlines() if code else [],
         'is_teacher': request.user.is_staff,
+        'user_attempt_count': user_solutions.count(),
+        'user_best_score': user_best_score,
+        'user_avg_score': user_avg_score,
+        'is_doc_file': is_doc_file,
+        'last_check': last_check,
     })
 
 
@@ -933,7 +1287,8 @@ def solution_detail(request, solution_id):
 # ТЕОРИЯ
 # ══════════════════════════════════════════════════════════════════════════════
 
-@login_required
+_PUBLIC_SUBJECT_SLUGS = {'asutps'}
+
 def theory_list(request):
     subject_slug = request.session.get('subject_slug', 'python')
     try:
@@ -941,17 +1296,24 @@ def theory_list(request):
     except Subject.DoesNotExist:
         current_subject = None
 
+    is_public = current_subject and current_subject.slug in _PUBLIC_SUBJECT_SLUGS
+    if not request.user.is_authenticated and not is_public:
+        return redirect(f'/login/?next={request.path}')
+
     qs = TheoryModule.objects.filter(is_active=True).prefetch_related('lessons', 'quizzes')
     if current_subject:
         qs = qs.filter(subject=current_subject)
     modules = list(qs)
 
-    completed_lesson_ids = set(
-        LessonProgress.objects.filter(user=request.user, completed=True)
-        .values_list('lesson_id', flat=True)
-    )
-
-    unlock_status = get_module_unlock_status(request.user, modules)
+    if request.user.is_authenticated:
+        completed_lesson_ids = set(
+            LessonProgress.objects.filter(user=request.user, completed=True)
+            .values_list('lesson_id', flat=True)
+        )
+        unlock_status = get_module_unlock_status(request.user, modules)
+    else:
+        completed_lesson_ids = set()
+        unlock_status = {}
 
     for module in modules:
         total = module.lessons.count()
@@ -976,10 +1338,13 @@ def theory_list(request):
     })
 
 
-@login_required
 def theory_lesson(request, lesson_id):
-    lesson = get_object_or_404(TheoryLesson, id=lesson_id)
+    lesson = get_object_or_404(TheoryLesson.objects.select_related('module__subject'), id=lesson_id)
     module = lesson.module
+
+    is_public = module.subject and module.subject.slug in _PUBLIC_SUBJECT_SLUGS
+    if not request.user.is_authenticated and not is_public:
+        return redirect(f'/login/?next={request.path}')
 
     # Все уроки модуля для навигации
     all_lessons = list(module.lessons.all())
@@ -987,17 +1352,21 @@ def theory_lesson(request, lesson_id):
     prev_lesson = all_lessons[current_index - 1] if current_index > 0 else None
     next_lesson = all_lessons[current_index + 1] if current_index < len(all_lessons) - 1 else None
 
-    # Отметка о прочтении + конспект
-    progress_obj = LessonProgress.objects.filter(user=request.user, lesson=lesson).first()
-    is_completed = bool(progress_obj and progress_obj.completed)
-    user_notes   = progress_obj.notes if progress_obj else ''
-
     # Тесты для этого модуля
     module_quizzes = module.quizzes.filter(is_active=True)
 
-    completed_ids = set(LessonProgress.objects.filter(
-        user=request.user, completed=True
-    ).values_list('lesson_id', flat=True))
+    if request.user.is_authenticated:
+        progress_obj = LessonProgress.objects.filter(user=request.user, lesson=lesson).first()
+        is_completed = bool(progress_obj and progress_obj.completed)
+        user_notes   = progress_obj.notes if progress_obj else ''
+        completed_ids = set(LessonProgress.objects.filter(
+            user=request.user, completed=True
+        ).values_list('lesson_id', flat=True))
+    else:
+        is_completed = False
+        user_notes   = ''
+        completed_ids = set()
+
     done_count = sum(1 for l in all_lessons if l.id in completed_ids)
     total_count = len(all_lessons)
     progress_pct = round(done_count * 100 / total_count) if total_count else 0
@@ -1074,7 +1443,9 @@ def switch_subject(request, slug):
     subject = get_object_or_404(Subject, slug=slug, is_active=True)
     request.session['subject_slug'] = subject.slug
     next_url = request.GET.get('next') or request.META.get('HTTP_REFERER', '/')
-    return redirect(next_url)
+    if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        return redirect(next_url)
+    return redirect('/')
 
 
 # ── Объявления ────────────────────────────────────────────────────────────────
@@ -1100,7 +1471,10 @@ def create_announcement(request):
                 expires_at=exp,
             )
             messages.success(request, 'Объявление опубликовано.')
-        return redirect(request.POST.get('next', 'home'))
+        _next = request.POST.get('next', '')
+        if _next and url_has_allowed_host_and_scheme(_next, allowed_hosts={request.get_host()}):
+            return redirect(_next)
+        return redirect('home')
     subjects = Subject.objects.filter(is_active=True)
     return render(request, 'works/announcement_form.html', {'subjects': subjects})
 
@@ -1145,6 +1519,24 @@ def announcement_list(request):
 # ТЕСТЫ
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _theory_complete_for_quiz(user, quiz) -> tuple[bool, int, int]:
+    """
+    Проверяет завершение теории для теста.
+    Возвращает (разрешено, пройдено, всего).
+    Если quiz.module не задан или учитель — всегда разрешено.
+    """
+    from works.models import LessonProgress
+    if not quiz.module_id or user.is_staff:
+        return True, 0, 0
+    total = quiz.module.lessons.count()
+    if total == 0:
+        return True, 0, 0
+    done = LessonProgress.objects.filter(
+        user=user, lesson__module=quiz.module, completed=True
+    ).count()
+    return done >= total, done, total
+
+
 @login_required
 def quiz_list(request):
     subject_slug = request.session.get('subject_slug', 'python')
@@ -1163,7 +1555,10 @@ def quiz_list(request):
 
     for quiz in quizzes:
         quiz.best_attempt = attempt_map.get(quiz.id)
-        # questions_count уже реализован как @property на модели
+        allowed, done, total_lessons = _theory_complete_for_quiz(request.user, quiz)
+        quiz.theory_locked = not allowed
+        quiz.theory_done = done
+        quiz.theory_total = total_lessons
 
     # Группировка по тематическим блокам — зависит от предмета
     BLOCKS_BY_SUBJECT = {
@@ -1171,6 +1566,14 @@ def quiz_list(request):
             {'title': 'Основы МПС и GPIO',          'icon': 'fas fa-microchip',  'color': '#0ea5e9', 'bg': '#f0f9ff', 'min': 1,  'max': 3},
             {'title': 'Прерывания и периферия',      'icon': 'fas fa-bolt',       'color': '#7c3aed', 'bg': '#f5f3ff', 'min': 4,  'max': 7},
             {'title': 'Интерфейсы и программирование','icon': 'fas fa-network-wired','color': '#0d9488','bg': '#f0fdfa', 'min': 8, 'max': 999},
+        ],
+        'asutps': [
+            {'title': 'Теория управления ТП',        'icon': 'fas fa-sliders-h',  'color': '#0ea5e9', 'bg': '#f0f9ff', 'min': 1, 'max': 1},
+            {'title': 'Техническое обеспечение',     'icon': 'fas fa-microchip',  'color': '#7c3aed', 'bg': '#f5f3ff', 'min': 2, 'max': 2},
+            {'title': 'Информационное обеспечение',  'icon': 'fas fa-database',   'color': '#0d9488', 'bg': '#f0fdfa', 'min': 3, 'max': 3},
+            {'title': 'Технологии и программирование','icon': 'fas fa-code',      'color': '#3b82f6', 'bg': '#eff6ff', 'min': 4, 'max': 4},
+            {'title': 'Интеграция и эффективность',  'icon': 'fas fa-chart-line', 'color': '#f59e0b', 'bg': '#fffbeb', 'min': 5, 'max': 5},
+            {'title': 'ИИ и сложные условия',        'icon': 'fas fa-robot',      'color': '#8b5cf6', 'bg': '#f5f3ff', 'min': 6, 'max': 999},
         ],
         'default': [
             {'title': 'Основы Python',            'icon': 'fas fa-seedling',  'color': '#10b981', 'bg': '#ecfdf5', 'min': 1,  'max': 10},
@@ -1208,10 +1611,48 @@ def quiz_list(request):
     })
 
 
+import time as _time
+
+MIN_SECONDS_PER_QUESTION = 4   # минимум секунд на вопрос
+MAX_ATTEMPTS_PER_HOUR = 10     # максимум попыток одного теста в час
+
+
+def _record_quiz_start(request, quiz_id):
+    """Фиксирует серверное время начала теста в сессии."""
+    request.session[f'quiz_start_{quiz_id}'] = _time.time()
+    request.session.modified = True
+
+
+def _check_quiz_rate_limit(user, quiz) -> tuple[bool, int]:
+    """Проверяет лимит попыток: не более MAX_ATTEMPTS_PER_HOUR за последние 2 часа,
+    только среди проваленных (passed=False). Возвращает (разрешено, попыток)."""
+    from django.utils import timezone
+    from datetime import timedelta
+    two_hours_ago = timezone.now() - timedelta(hours=2)
+    count = QuizAttempt.objects.filter(
+        user=user, quiz=quiz, created_at__gte=two_hours_ago, passed=False
+    ).count()
+    return count < MAX_ATTEMPTS_PER_HOUR, count
+
+
 @login_required
 def quiz_detail(request, quiz_id):
     quiz = get_object_or_404(Quiz, id=quiz_id, is_active=True)
-    questions = quiz.questions.prefetch_related('choices').all()
+
+    allowed, done, total = _theory_complete_for_quiz(request.user, quiz)
+    if not allowed:
+        return render(request, 'works/quiz_locked.html', {
+            'quiz': quiz, 'done': done, 'total': total,
+        })
+
+    _record_quiz_start(request, quiz_id)
+
+    import random as _random
+    questions_qs = list(quiz.questions.prefetch_related('choices').all())
+    _random.shuffle(questions_qs)  # вопросы в случайном порядке каждую попытку
+    for q in questions_qs:
+        q.shuffled_choices = list(q.choices.all())
+        _random.shuffle(q.shuffled_choices)
 
     best_attempt = QuizAttempt.objects.filter(
         user=request.user, quiz=quiz
@@ -1219,7 +1660,7 @@ def quiz_detail(request, quiz_id):
 
     return render(request, 'works/quiz.html', {
         'quiz': quiz,
-        'questions': questions,
+        'questions': questions_qs,
         'best_attempt': best_attempt,
     })
 
@@ -1229,25 +1670,40 @@ def quiz_adaptive(request, quiz_id):
     """Адаптивный режим теста — вопросы по одному, сложность адаптируется."""
     import json as _json
     quiz = get_object_or_404(Quiz, id=quiz_id, is_active=True)
-    questions = list(quiz.questions.prefetch_related('choices').order_by('difficulty', 'order'))
 
-    # Сериализуем вопросы для JS
+    allowed, done, total = _theory_complete_for_quiz(request.user, quiz)
+    if not allowed:
+        return render(request, 'works/quiz_locked.html', {
+            'quiz': quiz, 'done': done, 'total': total,
+        })
+
+    import random as _random
+    questions = list(quiz.questions.prefetch_related('choices').order_by('difficulty', 'order'))
+    # Перемешиваем внутри каждой группы сложности
+    from itertools import groupby
+    shuffled = []
+    for _, grp in groupby(questions, key=lambda q: q.difficulty):
+        g = list(grp)
+        _random.shuffle(g)
+        shuffled.extend(g)
+    questions = shuffled
+
+    import random as _random
+    # Сериализуем вопросы для JS — correct_ids НЕ включаем (проверка только на сервере)
     q_data = []
     for q in questions:
-        correct_ids = [c.id for c in q.choices.all() if c.is_correct]
+        choices = [{'id': c.id, 'text': c.text} for c in q.choices.all()]
+        _random.shuffle(choices)
         q_data.append({
             'id': q.id,
             'text': q.text,
             'code': q.code_snippet,
-            'type': q.q_type,
+            'q_type': q.q_type,
             'difficulty': q.difficulty,
-            'explanation': q.explanation,
-            'choices': [
-                {'id': c.id, 'text': c.text}
-                for c in q.choices.all()
-            ],
-            'correct_ids': correct_ids,
+            'choices': choices,
         })
+
+    _record_quiz_start(request, quiz_id)
 
     best_attempt = QuizAttempt.objects.filter(
         user=request.user, quiz=quiz
@@ -1255,7 +1711,7 @@ def quiz_adaptive(request, quiz_id):
 
     return render(request, 'works/quiz_adaptive.html', {
         'quiz': quiz,
-        'questions_json': _json.dumps(q_data, ensure_ascii=False),
+        'questions_json': _safe_json(q_data),
         'total': len(q_data),
         'best_attempt': best_attempt,
     })
@@ -1263,13 +1719,98 @@ def quiz_adaptive(request, quiz_id):
 
 @login_required
 @require_http_methods(["POST"])
+def check_quiz_answer(request, question_id):
+    """AJAX: проверяет ответ на один вопрос. Возвращает correct_ids + explanation только после ответа.
+    Доступ только для вопросов из теста, который пользователь сейчас проходит (сессионный ключ)."""
+    from works.models import Question
+    question = get_object_or_404(Question, id=question_id)
+
+    # Проверяем, что пользователь действительно открыл тест с этим вопросом
+    quiz = question.quiz
+    start_key = f'quiz_start_{quiz.id}'
+    if not request.user.is_staff and start_key not in request.session:
+        return JsonResponse({'error': 'Тест не начат или время сессии истекло.'}, status=403)
+
+    if question.q_type == 'single':
+        chosen_raw = request.POST.get('choice_id')
+        chosen_ids = {int(chosen_raw)} if chosen_raw else set()
+    else:
+        chosen_ids = set(int(v) for v in request.POST.getlist('choice_ids') if v)
+
+    correct_ids = set(question.choices.filter(is_correct=True).values_list('id', flat=True))
+    is_correct = chosen_ids == correct_ids
+
+    return JsonResponse({
+        'is_correct': is_correct,
+        'correct_ids': list(correct_ids),
+        'explanation': question.explanation if not is_correct else '',
+    })
+
+
+def _is_ajax(request):
+    return request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
+           request.POST.get('_ajax') == '1'
+
+
+def _quiz_error(request, quiz_id, msg, is_ajax):
+    """Вернуть ошибку: JSON для AJAX, redirect+flash для обычного запроса."""
+    if is_ajax:
+        return JsonResponse({'error': msg}, status=400)
+    messages.error(request, msg)
+    return redirect('quiz_detail', quiz_id=quiz_id)
+
+
+@login_required
+@require_http_methods(["POST"])
 def submit_quiz(request, quiz_id):
     quiz = get_object_or_404(Quiz, id=quiz_id, is_active=True)
-    questions = quiz.questions.prefetch_related('choices').all()
+    is_ajax = _is_ajax(request)
 
+    allowed, done, total_lessons = _theory_complete_for_quiz(request.user, quiz)
+    if not allowed:
+        return JsonResponse({'error': 'Сначала изучи всю теорию раздела.'}, status=403)
+
+    questions = quiz.questions.prefetch_related('choices').all()
     total = questions.count()
+
+    # Rate limit
+    if not request.user.is_staff:
+        rate_ok, recent_count = _check_quiz_rate_limit(request.user, quiz)
+        if not rate_ok:
+            msg = f'Превышен лимит неудачных попыток ({MAX_ATTEMPTS_PER_HOUR} за 2 часа). Попробуй позже.'
+            return _quiz_error(request, quiz_id, msg, is_ajax)
+
+    # Серверная проверка времени (клиентский POST-параметр не используем — его легко подделать)
+    suspicious = False
+    start_key = f'quiz_start_{quiz_id}'
+    start_time = request.session.get(start_key)
+    if start_time and not request.user.is_staff:
+        elapsed = _time.time() - start_time
+        min_required = total * MIN_SECONDS_PER_QUESTION
+        if elapsed < min_required:
+            logger.warning(
+                'submit_quiz BLOCKED: user=%s quiz=%s elapsed=%.1fs < min=%ds',
+                request.user.username, quiz_id, elapsed, min_required
+            )
+            msg = f'Тест пройден слишком быстро. Минимальное время — {min_required} секунд ({MIN_SECONDS_PER_QUESTION} сек/вопрос).'
+            return _quiz_error(request, quiz_id, msg, is_ajax)
+        if elapsed < min_required * 2:
+            suspicious = True
+    # Очищаем ключ — следующая попытка потребует нового открытия страницы
+    request.session.pop(start_key, None)
+
+    try:
+        time_spent = int(request.POST.get('time_spent_seconds', 0))
+    except (ValueError, TypeError):
+        time_spent = 0
+    try:
+        focus_loss_count = max(0, int(request.POST.get('focus_loss_count', 0)))
+    except (ValueError, TypeError):
+        focus_loss_count = 0
+
     correct = 0
     results = {}
+    all_chosen_ids = []
 
     for question in questions:
         correct_ids = set(
@@ -1286,6 +1827,7 @@ def submit_quiz(request, quiz_id):
         is_correct = (chosen_ids == correct_ids)
         if is_correct:
             correct += 1
+        all_chosen_ids.append(tuple(sorted(chosen_ids)))
 
         results[str(question.id)] = {
             'chosen': list(chosen_ids),
@@ -1294,8 +1836,23 @@ def submit_quiz(request, quiz_id):
             'explanation': question.explanation,
         }
 
+    # Анализ паттерна: все ответы одинаковые или нет ни одного ответа
+    if not request.user.is_staff and total > 2:
+        unanswered = sum(1 for c in all_chosen_ids if not c)
+        if unanswered == total:
+            suspicious = True  # никаких ответов — просто нажал отправить
+        elif len(set(all_chosen_ids)) == 1 and all_chosen_ids[0]:
+            suspicious = True  # все ответы идентичны — явный паттерн
+
+    # Много уходов со вкладки — тоже подозрительно
+    if focus_loss_count >= 3 and not request.user.is_staff:
+        suspicious = True
+
     score = round(correct * 100 / total) if total else 0
     passed = score >= quiz.pass_score
+
+    if time_spent < 0 or time_spent > 86400:
+        time_spent = 0
 
     attempt = QuizAttempt.objects.create(
         user=request.user,
@@ -1303,19 +1860,95 @@ def submit_quiz(request, quiz_id):
         score=score,
         passed=passed,
         answers=results,
+        time_spent_seconds=time_spent,
+        focus_loss_count=focus_loss_count,
+        suspicious=suspicious,
     )
+    if suspicious:
+        logger.warning(
+            'SUSPICIOUS ATTEMPT id=%s user=%s quiz=%s score=%d focus_loss=%d',
+            attempt.id, request.user.username, quiz_id, score, focus_loss_count
+        )
+    if is_ajax:
+        from django.urls import reverse
+        return JsonResponse({'redirect': reverse('quiz_result', args=[attempt.id])})
+    return redirect('quiz_result', attempt_id=attempt.id)
+
+
+@login_required
+@require_http_methods(["GET"])
+def quiz_result(request, attempt_id):
+    attempt = get_object_or_404(QuizAttempt, id=attempt_id, user=request.user)
+    quiz = attempt.quiz
+    questions = quiz.questions.prefetch_related('choices').all()
+    results = attempt.answers or {}
+    total = questions.count()
+    correct = sum(1 for v in results.values() if v.get('is_correct'))
+    # Не раскрываем correct_ids для правильно отвеченных вопросов
+    results_safe = {}
+    for qid, data in results.items():
+        entry = dict(data)
+        if entry.get('is_correct'):
+            entry.pop('correct', None)
+        results_safe[qid] = entry
     return render(request, 'works/quiz_result.html', {
         'quiz': quiz,
         'attempt': attempt,
         'questions': questions,
         'results': results,
-        'results_json': json.dumps(results),
+        'results_json': json.dumps(results_safe),
         'correct': correct,
         'errors': total - correct,
         'total': total,
-        'score': score,
-        'passed': passed,
+        'score': attempt.score,
+        'passed': attempt.passed,
     })
+
+
+@login_required
+@require_http_methods(["POST"])
+def check_plagiarism(request, solution_id):
+    """AJAX: запускает проверку на плагиат для решения (только для staff)."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Доступ запрещён'}, status=403)
+    solution = get_object_or_404(Solution, id=solution_id)
+    from works.plagiarism import check_solution
+    matches = check_solution(solution)
+    max_score = max((m.score for m in matches), default=0.0)
+    solution.similarity_score = max_score
+    solution.similarity_matches = [m._asdict() for m in matches]
+    solution.save(update_fields=['similarity_score', 'similarity_matches'])
+    return JsonResponse({
+        'max_score': max_score,
+        'matches': [m._asdict() for m in matches],
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def recheck_doc(request, solution_id):
+    """AJAX: повторная ИИ-проверка docx/pdf отчёта. Только staff."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Доступ запрещён'}, status=403)
+    solution = get_object_or_404(Solution, id=solution_id)
+    ext = os.path.splitext(solution.code_file.name)[1].lower()
+    if ext not in ('.docx', '.pdf', '.doc'):
+        return JsonResponse({'error': 'Файл не является отчётом (docx/pdf)'}, status=400)
+    from works.models import CodeCheck as _CC
+    from works.ai_checker import AICodeChecker
+    from django.utils import timezone as _tz
+    import threading
+    cc = _CC.objects.create(
+        solution=solution, status='in_progress',
+        check_type='auto', created_at=_tz.now()
+    )
+    def _run(_sid, _cid):
+        try:
+            AICodeChecker().check_solution(_sid, _cid)
+        except Exception:
+            pass
+    threading.Thread(target=_run, args=(solution.id, cc.id), daemon=True).start()
+    return JsonResponse({'ok': True, 'check_id': cc.id})
 
 
 @login_required
@@ -1350,7 +1983,8 @@ def run_code_snippet(request):
             "via_cloud": result.get("via") in ("wandbox", "piston"),
         })
     except Exception as e:
-        return JsonResponse({"status": "error", "output": f"Ошибка сервера: {e}", "via_cloud": False})
+        logger.exception('run_code_snippet internal error')
+        return JsonResponse({"status": "error", "output": "Внутренняя ошибка сервера", "via_cloud": False})
 
 
 @login_required
@@ -1360,6 +1994,19 @@ def playground(request):
     allowed = {"python", "cpp", "java", "javascript"}
     lang = lang if lang in allowed else "python"
     return render(request, "works/playground.html", {"default_lang": lang})
+
+
+@_staff_required
+def pygrid_game(request):
+    """PyGrid — обучающая игра (только для преподавателей)."""
+    return render(request, "works/pygrid.html")
+
+
+def pygrid_beta(request):
+    """PyGrid — бета-доступ для студентов (только авторизованные)."""
+    if not request.user.is_authenticated:
+        return redirect(f'/login/?next={request.path}')
+    return render(request, "works/pygrid.html", {"beta_mode": True})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1616,9 +2263,12 @@ def manual_grade(request, solution_id):
     new_status = request.POST.get('status', solution.status)
 
     score = None
+    score_pts = None
     if score_raw.isdigit():
-        score = min(int(score_raw), solution.work.max_score or 100)
-        solution.score  = score
+        max_s = solution.work.max_score or 100
+        score_pts = min(int(score_raw), max_s)
+        score = round(score_pts * 100 / max_s)  # store as percentage
+        solution.score = score
     solution.status = new_status
     solution.save()
 
@@ -1643,7 +2293,7 @@ def manual_grade(request, solution_id):
             user=solution.student,
             n_type='graded',
             title=f'Работа «{solution.work.title}» проверена',
-            message=f'Оценка: {score}/{solution.work.max_score or 100}',
+            message=f'Оценка: {score_pts}/{solution.work.max_score or 100}',
             link=f'/solution/{solution.id}/',
         )
         _notify_email(
@@ -1652,8 +2302,23 @@ def manual_grade(request, solution_id):
             f'Оценка: {score}. Откройте решение для просмотра комментариев.',
         )
 
+    # Пересчитать прогресс студента после оценки
+    student = solution.student
+    progress, _ = UserProgress.objects.get_or_create(user=student)
+    progress.completed_works = Solution.objects.filter(
+        student=student, status__in=['correct', 'partially_correct']
+    ).values('work').distinct().count()
+    progress.total_score = Solution.objects.filter(student=student).aggregate(Sum('score'))['score__sum'] or 0
+    progress.average_score = (progress.total_score / progress.completed_works
+                              if progress.completed_works > 0 else 0)
+    progress.save(update_fields=['completed_works', 'total_score', 'average_score'])
+    check_achievements(student)
+
     messages.success(request, f'Оценка сохранена: {score}, статус: {new_status}')
-    return redirect(request.POST.get('next', 'teacher_solutions'))
+    _next = request.POST.get('next', '')
+    if _next and url_has_allowed_host_and_scheme(_next, allowed_hosts={request.get_host()}):
+        return redirect(_next)
+    return redirect('teacher_solutions')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1662,9 +2327,12 @@ def manual_grade(request, solution_id):
 
 @login_required
 def leaderboard(request):
+    # Синхронизируем только текущего пользователя (пересчёт всех — DoS)
+    _sync_user_progress(request.user)
+
     group_filter = request.GET.get('group', '')
     qs = UserProgress.objects.filter(
-        user__is_active=True, user__is_staff=False
+        user__is_active=True
     ).select_related('user').order_by('-total_score', '-completed_works')
 
     all_groups = list(
@@ -1681,11 +2349,26 @@ def leaderboard(request):
         if p.user_id == request.user.id:
             my_rank = i
 
+    group_stats = list(
+        UserProgress.objects.filter(user__is_active=True, group__gt='')
+        .values('group')
+        .annotate(
+            avg_score=Avg('total_score'),
+            student_count=Count('id'),
+            avg_works=Avg('completed_works'),
+            avg_streak=Avg('streak_days'),
+        )
+        .order_by('-avg_score')
+    )
+    for i, g in enumerate(group_stats, 1):
+        g['rank'] = i
+
     return render(request, 'works/leaderboard.html', {
         'leaders': leaders,
         'my_rank': my_rank,
         'all_groups': all_groups,
         'group_filter': group_filter,
+        'group_stats': group_stats,
     })
 
 
@@ -1753,6 +2436,39 @@ def dev_reload(request):
 
 def about(request):
     return render(request, 'works/about.html')
+
+
+@login_required
+def quiz_history(request, quiz_id):
+    """История всех попыток пользователя по конкретному тесту с разбором ошибок."""
+    quiz = get_object_or_404(Quiz, id=quiz_id, is_active=True)
+    attempts = QuizAttempt.objects.filter(user=request.user, quiz=quiz).order_by('-created_at')
+    questions = {str(q.id): q for q in quiz.questions.prefetch_related('choices').all()}
+
+    attempts_detail = []
+    for attempt in attempts:
+        breakdown = []
+        for qid, data in attempt.answers.items():
+            q = questions.get(qid)
+            if not q:
+                continue
+            choices_map = {str(c.id): c.text for c in q.choices.all()}
+            chosen_texts = [choices_map.get(str(cid), str(cid)) for cid in data.get('chosen', [])]
+            correct_texts = [choices_map.get(str(cid), str(cid)) for cid in data.get('correct', [])]
+            breakdown.append({
+                'question': q.text,
+                'code': q.code_snippet,
+                'is_correct': data.get('is_correct', False),
+                'chosen': chosen_texts,
+                'correct': correct_texts,
+                'explanation': data.get('explanation', ''),
+            })
+        attempts_detail.append({'attempt': attempt, 'breakdown': breakdown})
+
+    return render(request, 'works/quiz_history.html', {
+        'quiz': quiz,
+        'attempts_detail': attempts_detail,
+    })
 
 # ══════════════════════════════════════════════════════════════════════════════
 # СМЕНА ПАРОЛЯ
@@ -1833,7 +2549,7 @@ def solution_diff(request, sol1_id, sol2_id):
     sol1 = get_object_or_404(Solution, id=sol1_id)
     sol2 = get_object_or_404(Solution, id=sol2_id)
     # Доступ: только свои попытки или преподаватель
-    if not request.user.is_staff and sol1.student != request.user:
+    if not request.user.is_staff and (sol1.student != request.user or sol2.student != request.user):
         return redirect('home')
 
     lines1 = _read_solution_code(sol1).splitlines()
@@ -1912,7 +2628,10 @@ def add_line_comment(request, solution_id):
             text=text,
             line_number=int(line_number) if line_number else None,
         )
-    return redirect(request.POST.get('next', 'home'))
+    _next = request.POST.get('next', '')
+    if _next and url_has_allowed_host_and_scheme(_next, allowed_hosts={request.get_host()}):
+        return redirect(_next)
+    return redirect('home')
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1996,19 +2715,94 @@ def teacher_analytics(request):
             pass
     top_errors = error_counter.most_common(8)
 
+    # === Статистика тестов по студентам ===
+    all_quizzes = list(Quiz.objects.filter(is_active=True).order_by('module__order').select_related('module'))
+
+    students_list = list(
+        User.objects.filter(is_active=True, is_staff=False).order_by('last_name', 'first_name')
+    )
+    if group_filter:
+        students_list = [
+            u for u in students_list
+            if UserProgress.objects.filter(user=u, group=group_filter).exists()
+        ]
+
+    # Все попытки одним запросом
+    attempts_all = QuizAttempt.objects.filter(
+        user__in=students_list
+    ).values('user_id', 'quiz_id', 'score', 'passed')
+
+    # Индекс: (user_id, quiz_id) → best attempt
+    attempt_index = {}
+    for a in attempts_all:
+        key = (a['user_id'], a['quiz_id'])
+        if key not in attempt_index or a['score'] > attempt_index[key]['score']:
+            attempt_index[key] = a
+
+    quiz_student_rows = []
+    for u in students_list:
+        row_attempts = []
+        total_taken = 0
+        total_passed = 0
+        for q in all_quizzes:
+            best = attempt_index.get((u.id, q.id))
+            row_attempts.append(best)
+            if best:
+                total_taken += 1
+                if best['passed']:
+                    total_passed += 1
+        quiz_student_rows.append({
+            'user': u,
+            'attempts': row_attempts,
+            'total_taken': total_taken,
+            'total_passed': total_passed,
+            'pass_rate': round(total_passed * 100 / total_taken) if total_taken else 0,
+        })
+
+    # Per-quiz summary
+    quiz_summary = []
+    for q in all_quizzes:
+        taken = sum(1 for u in students_list if (u.id, q.id) in attempt_index)
+        passed = sum(1 for u in students_list if attempt_index.get((u.id, q.id), {}).get('passed'))
+        avg_sc = 0
+        scores = [attempt_index[(u.id, q.id)]['score'] for u in students_list if (u.id, q.id) in attempt_index]
+        if scores:
+            avg_sc = round(sum(scores) / len(scores), 1)
+        quiz_summary.append({'quiz': q, 'taken': taken, 'passed': passed, 'avg_score': avg_sc})
+
+    # Тепловая карта за 90 дней (GitHub-стиль)
+    today = timezone.now().date()
+    heatmap_raw = {}
+    for i in range(89, -1, -1):
+        day = today - timedelta(days=i)
+        heatmap_raw[day.isoformat()] = 0
+    for sol in Solution.objects.filter(submitted_at__date__gte=today - timedelta(days=89)).values('submitted_at__date').annotate(cnt=Count('id')):
+        k = sol['submitted_at__date'].isoformat()
+        if k in heatmap_raw:
+            heatmap_raw[k] = sol['cnt']
+    import json as _json2
+    heatmap_json = _json2.dumps(heatmap_raw)
+
     return render(request, 'works/teacher_analytics.html', {
-        'work_stats':      work_stats,
-        'hardest':         hardest,
-        'days':            days,
-        'total_students':  total_students,
-        'avg_score_all':   round(avg_score_all, 1),
-        'total_solutions': total_solutions,
-        'passed_solutions': passed_solutions,
-        'pass_rate_all':   round(passed_solutions * 100 / total_solutions) if total_solutions else 0,
-        'all_groups':      all_groups,
-        'group_filter':    group_filter,
-        'error_works':     error_works,
-        'top_errors':      top_errors,
+        'work_stats':         work_stats,
+        'hardest':            hardest,
+        'days':               days,
+        'total_students':     total_students,
+        'avg_score_all':      round(avg_score_all, 1),
+        'total_solutions':    total_solutions,
+        'passed_solutions':   passed_solutions,
+        'heatmap_json':       heatmap_json,
+        'pass_rate_all':      round(passed_solutions * 100 / total_solutions) if total_solutions else 0,
+        'all_groups':         all_groups,
+        'group_filter':       group_filter,
+        'error_works':        error_works,
+        'top_errors':         top_errors,
+        'all_quizzes':        all_quizzes,
+        'quiz_student_rows':  quiz_student_rows,
+        'quiz_summary':       quiz_summary,
+        'total_quizzes':      len(all_quizzes),
+        'review_requests':    ReviewRequest.objects.filter(status='pending').select_related('student').order_by('-requested_at')[:30],
+        'review_pending_count': ReviewRequest.objects.filter(status='pending').count(),
     })
 
 
@@ -2306,6 +3100,11 @@ def circuit_editor(request, work_id):
     })
 
 
+def pid_simulator(request):
+    """ПИД-симулятор для МДК 03.02 — доступен без регистрации."""
+    return render(request, 'works/pid_simulator.html')
+
+
 @login_required
 def circuit_editor_free(request):
     """Свободный симулятор без привязки к заданию."""
@@ -2418,5 +3217,218 @@ def circuit_solutions_list(request):
     return render(request, 'works/circuit_solutions_list.html', {
         'solutions': sols[:100],
         'status_filter': status_filter,
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# КУРСОВЫЕ РАБОТЫ
+# ══════════════════════════════════════════════════════════════════════════════
+
+@_staff_required
+def coursework_list(request):
+    """Список всех курсовых работ (учитель)."""
+    subject_id = request.GET.get('subject', '')
+    qs = CourseWork.objects.select_related('student', 'subject', 'assigned_by').order_by(
+        'subject__title', 'student__last_name'
+    )
+    if subject_id:
+        qs = qs.filter(subject_id=subject_id)
+    subjects = Subject.objects.filter(is_active=True).order_by('order')
+    return render(request, 'works/coursework_list.html', {
+        'courseworks': qs,
+        'subjects': subjects,
+        'selected_subject': subject_id,
+    })
+
+
+@_staff_required
+@require_http_methods(['GET', 'POST'])
+def coursework_assign(request, cw_id=None):
+    """Создать или редактировать назначение курсовой работы."""
+    cw = get_object_or_404(CourseWork, id=cw_id) if cw_id else None
+    students = User.objects.filter(is_active=True, is_staff=False).order_by('last_name', 'first_name')
+    subjects = Subject.objects.filter(is_active=True).order_by('order')
+
+    if request.method == 'POST':
+        student_id = request.POST.get('student_id')
+        subject_id = request.POST.get('subject_id') or None
+        title      = request.POST.get('title', '').strip()
+        description = request.POST.get('description', '').strip()
+        status     = request.POST.get('status', 'assigned')
+        deadline   = request.POST.get('deadline') or None
+        teacher_note = request.POST.get('teacher_note', '').strip()
+        grade_raw  = request.POST.get('grade', '')
+        grade      = int(grade_raw) if grade_raw.isdigit() and 1 <= int(grade_raw) <= 5 else None
+
+        if not title or not student_id:
+            messages.error(request, 'Укажи студента и тему.')
+        else:
+            if cw:
+                cw.student_id   = student_id
+                cw.subject_id   = subject_id
+                cw.title        = title
+                cw.description  = description
+                cw.status       = status
+                cw.deadline     = deadline
+                cw.teacher_note = teacher_note
+                cw.grade        = grade
+                cw.save()
+                messages.success(request, 'Курсовая обновлена.')
+            else:
+                cw = CourseWork.objects.create(
+                    student_id=student_id, subject_id=subject_id,
+                    title=title, description=description, status=status,
+                    deadline=deadline, teacher_note=teacher_note,
+                    grade=grade, assigned_by=request.user,
+                )
+                messages.success(request, f'Курсовая назначена студенту.')
+                Notification.send(
+                    user=cw.student, n_type='info',
+                    title='Назначена курсовая работа',
+                    message=f'Тема: «{cw.title}»',
+                )
+            return redirect('coursework_list')
+
+    return render(request, 'works/coursework_assign.html', {
+        'cw': cw,
+        'students': students,
+        'subjects': subjects,
+        'status_choices': CourseWork.STATUS_CHOICES,
+    })
+
+
+@_staff_required
+@require_http_methods(['POST'])
+def coursework_delete(request, cw_id):
+    cw = get_object_or_404(CourseWork, id=cw_id)
+    cw.delete()
+    messages.success(request, 'Курсовая удалена.')
+    return redirect('coursework_list')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# АЛГОРИТМ-ВИЗУАЛИЗАТОР
+# ══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+def algo_visualizer(request):
+    return render(request, 'works/algo_visualizer.html')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PYGRID ЛИДЕРБОРД API
+# ══════════════════════════════════════════════════════════════════════════════
+
+@login_required
+@require_http_methods(['POST'])
+def pygrid_score_submit(request):
+    """Сохранить результат PyGrid для текущего пользователя."""
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'bad json'}, status=400)
+    rounds   = int(data.get('rounds_completed', 0))
+    stars    = int(data.get('stars_total', 0))
+    steps    = int(data.get('best_steps', 0))
+    score, _ = PyGridScore.objects.get_or_create(user=request.user)
+    if rounds > score.rounds_completed or (rounds == score.rounds_completed and stars > score.stars_total):
+        score.rounds_completed = rounds
+        score.stars_total = stars
+        score.best_steps = steps
+        score.save()
+    return JsonResponse({'ok': True, 'rounds': score.rounds_completed, 'stars': score.stars_total})
+
+
+@login_required
+def pygrid_leaderboard(request):
+    """Топ-20 игроков PyGrid."""
+    top = list(
+        PyGridScore.objects.select_related('user')
+        .order_by('-rounds_completed', '-stars_total', 'best_steps')[:20]
+    )
+    rows = []
+    me_rank = None
+    for i, s in enumerate(top, 1):
+        rows.append({
+            'rank': i,
+            'name': s.user.get_full_name() or s.user.username,
+            'rounds': s.rounds_completed,
+            'stars': s.stars_total,
+            'steps': s.best_steps,
+            'is_me': s.user_id == request.user.id,
+        })
+        if s.user_id == request.user.id:
+            me_rank = i
+    return JsonResponse({'leaderboard': rows, 'me_rank': me_rank})
+
+
+@login_required
+@require_http_methods(['POST'])
+def mark_review_done(request, rr_id):
+    """Преподаватель закрывает запрос на проверку."""
+    if not request.user.is_staff:
+        return JsonResponse({'ok': False}, status=403)
+    ReviewRequest.objects.filter(id=rr_id).update(status='done')
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@require_http_methods(['POST'])
+def submit_all_for_review(request):
+    """Студент отправляет все работы на проверку; ИИ запускается для каждого решения без завершённого CodeCheck."""
+    all_solutions = Solution.objects.filter(student=request.user)
+    solutions_count = all_solutions.count()
+    if solutions_count == 0:
+        return JsonResponse({'ok': False, 'error': 'Нет сданных работ'}, status=400)
+
+    comment = request.POST.get('comment', '').strip()[:500]
+
+    req = ReviewRequest.objects.create(
+        student=request.user,
+        solutions_count=solutions_count,
+        comment=comment,
+    )
+
+    # Запускаем ИИ-проверку для решений без завершённого CodeCheck
+    already_checked_ids = set(
+        CodeCheck.objects.filter(
+            solution__student=request.user,
+            status='completed',
+        ).values_list('solution_id', flat=True)
+    )
+    in_progress_ids = set(
+        CodeCheck.objects.filter(
+            solution__student=request.user,
+            status='in_progress',
+        ).values_list('solution_id', flat=True)
+    )
+    to_check = [s for s in all_solutions if s.id not in already_checked_ids and s.id not in in_progress_ids]
+
+    import threading
+
+    def _run(solution_id, cc_id):
+        try:
+            checker = AICodeChecker()
+            checker.check_solution(solution_id, code_check_id=cc_id)
+        except Exception:
+            logger.exception('submit_all_for_review: AI check failed for solution %s', solution_id)
+
+    launched = 0
+    for sol in to_check:
+        cc = CodeCheck.objects.create(
+            solution=sol,
+            status='in_progress',
+            check_type='auto',
+            created_at=timezone.now(),
+        )
+        t = threading.Thread(target=_run, args=(sol.id, cc.id), daemon=True)
+        t.start()
+        launched += 1
+
+    return JsonResponse({
+        'ok': True,
+        'requested_at': req.requested_at.strftime('%d.%m.%Y %H:%M'),
+        'solutions_count': solutions_count,
+        'ai_launched': launched,
     })
 

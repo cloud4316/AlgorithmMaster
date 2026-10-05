@@ -1,0 +1,280 @@
+{% extends 'works/base.html' %}
+{% block title %}ПИД-регулятор — симулятор | МДК 03.02{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1100px">
+  <div class="page-header">
+    <div>
+      <h1>Симулятор ПИД-регулятора</h1>
+      <p class="page-subtitle">МДК 03.02 · Практическая работа: настройка регулятора</p>
+    </div>
+    <a href="{% url 'theory_list' %}" class="btn btn-ghost btn-sm">← Теория</a>
+  </div>
+
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:1.5rem;align-items:start">
+
+    <!-- Панель настроек -->
+    <div>
+      <div class="card mb-3">
+        <div class="card-header"><h3 style="margin:0;font-size:.95rem">Объект управления</h3></div>
+        <div class="card-body">
+          <label class="form-label">Тип процесса</label>
+          <select id="processType" class="form-control mb-3">
+            <option value="first_order">1-й порядок (бак, температура)</option>
+            <option value="second_order">2-й порядок (механика)</option>
+            <option value="integrating">Интегрирующий (уровень)</option>
+          </select>
+
+          <label class="form-label">Постоянная времени T (с)</label>
+          <input type="range" id="procT" min="1" max="30" value="10" step="1" class="pid-slider">
+          <div class="slider-val">T = <span id="procT_val">10</span> с</div>
+
+          <label class="form-label">Коэффициент усиления K</label>
+          <input type="range" id="procK" min="0.1" max="5" value="1" step="0.1" class="pid-slider">
+          <div class="slider-val">K = <span id="procK_val">1.0</span></div>
+
+          <label class="form-label" style="margin-top:.75rem">Задание (Setpoint)</label>
+          <input type="range" id="setpoint" min="0" max="100" value="60" step="1" class="pid-slider">
+          <div class="slider-val">SP = <span id="setpoint_val">60</span>%</div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header"><h3 style="margin:0;font-size:.95rem">Параметры ПИД</h3></div>
+        <div class="card-body">
+          <label class="form-label pid-p">Kp — Пропорциональный</label>
+          <input type="range" id="kp" min="0" max="10" value="1.2" step="0.05" class="pid-slider">
+          <div class="slider-val">Kp = <span id="kp_val">1.20</span></div>
+
+          <label class="form-label pid-i" style="margin-top:.75rem">Ki — Интегральный</label>
+          <input type="range" id="ki" min="0" max="5" value="0.3" step="0.01" class="pid-slider">
+          <div class="slider-val">Ki = <span id="ki_val">0.30</span></div>
+
+          <label class="form-label pid-d" style="margin-top:.75rem">Kd — Дифференциальный</label>
+          <input type="range" id="kd" min="0" max="5" value="0.1" step="0.01" class="pid-slider">
+          <div class="slider-val">Kd = <span id="kd_val">0.10</span></div>
+
+          <label class="form-label" style="margin-top:.75rem">Шум измерения σ</label>
+          <input type="range" id="noise" min="0" max="5" value="0" step="0.1" class="pid-slider">
+          <div class="slider-val">σ = <span id="noise_val">0.0</span>%</div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header"><h3 style="margin:0;font-size:.95rem">Управление</h3></div>
+        <div class="card-body">
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button id="btnRun" class="btn btn-primary" style="flex:1" onclick="startSim()">▶ Пуск</button>
+            <button id="btnStop" class="btn btn-ghost" style="flex:1" onclick="stopSim()" disabled>⏹ Стоп</button>
+          </div>
+          <button class="btn btn-ghost btn-sm w-full mt-2" onclick="resetSim()">↺ Сброс</button>
+
+          <div style="margin-top:1rem;padding:.75rem;background:var(--surface-2,#f8f9fa);border-radius:8px">
+            <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.4rem">Показатели качества</div>
+            <div class="metric-row"><span>Перерегулирование</span><span id="overshoot">—</span></div>
+            <div class="metric-row"><span>Время регулирования</span><span id="settle_time">—</span></div>
+            <div class="metric-row"><span>Статич. ошибка</span><span id="steady_err">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body" style="font-size:.82rem;color:var(--text-muted);line-height:1.6">
+          <b>Подсказка:</b><br>
+          Kp ↑ — быстрее, но перерегулирование<br>
+          Ki ↑ — устраняет статическую ошибку<br>
+          Kd ↑ — гасит колебания, чувствителен к шуму
+        </div>
+      </div>
+    </div>
+
+    <!-- Графики -->
+    <div>
+      <div class="card mb-3">
+        <div class="card-header">
+          <h3 style="margin:0;font-size:.95rem">Переходный процесс</h3>
+          <span id="sim_time" style="font-size:.8rem;color:var(--text-muted)">t = 0 с</span>
+        </div>
+        <div class="card-body" style="padding:.75rem">
+          <canvas id="chartPV" height="200"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3 style="margin:0;font-size:.95rem">Управляющее воздействие (CO)</h3></div>
+        <div class="card-body" style="padding:.75rem">
+          <canvas id="chartCO" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.pid-slider{width:100%;accent-color:var(--primary);margin:.2rem 0}
+.slider-val{font-size:.82rem;color:var(--text-muted);text-align:right;margin-bottom:.5rem}
+.metric-row{display:flex;justify-content:space-between;font-size:.83rem;padding:.15rem 0;border-bottom:1px solid var(--border)}
+.metric-row:last-child{border-bottom:none}
+.metric-row span:last-child{font-weight:600;color:var(--primary)}
+.pid-p{color:#ef4444}
+.pid-i{color:#3b82f6}
+.pid-d{color:#10b981}
+.w-full{width:100%}
+.mt-2{margin-top:.5rem}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ── Слайдеры ──────────────────────────────────────────────────────────────
+const sliders = {
+  procT: {el: document.getElementById('procT'), out: document.getElementById('procT_val'), fmt: v=>v},
+  procK: {el: document.getElementById('procK'), out: document.getElementById('procK_val'), fmt: v=>parseFloat(v).toFixed(1)},
+  setpoint: {el: document.getElementById('setpoint'), out: document.getElementById('setpoint_val'), fmt: v=>v},
+  kp: {el: document.getElementById('kp'), out: document.getElementById('kp_val'), fmt: v=>parseFloat(v).toFixed(2)},
+  ki: {el: document.getElementById('ki'), out: document.getElementById('ki_val'), fmt: v=>parseFloat(v).toFixed(2)},
+  kd: {el: document.getElementById('kd'), out: document.getElementById('kd_val'), fmt: v=>parseFloat(v).toFixed(2)},
+  noise: {el: document.getElementById('noise'), out: document.getElementById('noise_val'), fmt: v=>parseFloat(v).toFixed(1)},
+};
+Object.values(sliders).forEach(s => {
+  s.out.textContent = s.fmt(s.el.value);
+  s.el.addEventListener('input', () => { s.out.textContent = s.fmt(s.el.value); });
+});
+const g = id => parseFloat(document.getElementById(id).value);
+
+// ── Charts ────────────────────────────────────────────────────────────────
+const mkChart = (id, datasets, yMin, yMax) => new Chart(document.getElementById(id), {
+  type: 'line',
+  data: { labels: [], datasets },
+  options: {
+    animation: false,
+    responsive: true,
+    plugins: { legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } } },
+    scales: {
+      x: { title: { display: true, text: 'Время (с)', font: { size: 11 } }, ticks: { maxTicksLimit: 10 } },
+      y: { min: yMin, max: yMax, title: { display: true, text: '%', font: { size: 11 } } }
+    }
+  }
+});
+
+const chartPV = mkChart('chartPV', [
+  { label: 'Задание (SP)', data: [], borderColor: '#94a3b8', borderDash: [6,3], borderWidth: 1.5, pointRadius: 0 },
+  { label: 'Параметр (PV)', data: [], borderColor: '#667eea', borderWidth: 2, pointRadius: 0, fill: false },
+], -10, 120);
+
+const chartCO = mkChart('chartCO', [
+  { label: 'Управление (CO)', data: [], borderColor: '#f59e0b', borderWidth: 2, pointRadius: 0, fill: true,
+    backgroundColor: 'rgba(245,158,11,.1)' },
+], -10, 110);
+
+// ── Симуляция ─────────────────────────────────────────────────────────────
+let simTimer = null, simT = 0;
+const DT = 0.1;  // шаг интегрирования (с)
+const MAX_T = 120;
+let pv = 0, integral = 0, prevErr = 0, coState = 0;
+// Состояние объекта 2-го порядка
+let x1 = 0, x2 = 0;
+
+function processStep(co) {
+  const type = document.getElementById('processType').value;
+  const T = g('procT'), K = g('procK');
+  if (type === 'first_order') {
+    pv += DT * (K * co - pv) / T;
+  } else if (type === 'integrating') {
+    pv += DT * K * co / T;
+  } else { // second_order
+    const T2 = T * 0.4;
+    const dx1 = x2;
+    const dx2 = (K * co - 2 * x1 - T2 * x2) / (T * T2);
+    x1 += DT * dx1;
+    x2 += DT * dx2;
+    pv = x1;
+  }
+  pv = Math.max(-200, Math.min(200, pv));
+  return pv;
+}
+
+function pidStep(sp, pvMeas) {
+  const kp = g('kp'), ki = g('ki'), kd = g('kd');
+  const err = sp - pvMeas;
+  integral = Math.max(-100, Math.min(100, integral + err * DT));
+  const deriv = (err - prevErr) / DT;
+  prevErr = err;
+  const co = kp * err + ki * integral + kd * deriv;
+  return Math.max(0, Math.min(100, co));
+}
+
+let maxPV = 0, spReached = null, settled = false, settleStart = null, settleT = null;
+
+function tick() {
+  simT = Math.round((simT + DT) * 10) / 10;
+  const sp = g('setpoint');
+  const sigma = g('noise');
+  const pvMeas = pv + (sigma > 0 ? (Math.random()*2-1)*sigma : 0);
+  const co = pidStep(sp, pvMeas);
+  coState = co;
+  processStep(co);
+
+  const label = simT.toFixed(1);
+  chartPV.data.labels.push(label);
+  chartPV.data.datasets[0].data.push(sp);
+  chartPV.data.datasets[1].data.push(+pv.toFixed(3));
+  chartCO.data.labels.push(label);
+  chartCO.data.datasets[0].data.push(+co.toFixed(3));
+
+  // Trim to last 600 points
+  if (chartPV.data.labels.length > 600) {
+    chartPV.data.labels.shift();
+    chartPV.data.datasets.forEach(d => d.data.shift());
+    chartCO.data.labels.shift();
+    chartCO.data.datasets[0].data.shift();
+  }
+
+  chartPV.update('none');
+  chartCO.update('none');
+  document.getElementById('sim_time').textContent = 't = ' + simT.toFixed(1) + ' с';
+
+  // Показатели качества
+  if (pv > maxPV) maxPV = pv;
+  if (spReached === null && pv >= sp * 0.95) spReached = simT;
+  const err = Math.abs(pv - sp);
+  if (err < sp * 0.02) {
+    if (settleStart === null) settleStart = simT;
+    if (!settled && simT - settleStart > 2) { settled = true; settleT = simT; }
+  } else {
+    settleStart = null;
+  }
+  if (sp > 0) {
+    const over = Math.max(0, maxPV - sp);
+    document.getElementById('overshoot').textContent = (over / sp * 100).toFixed(1) + '%';
+  }
+  document.getElementById('settle_time').textContent = settleT ? settleT.toFixed(1) + ' с' : '—';
+  document.getElementById('steady_err').textContent = simT > 10 ? Math.abs(pv - sp).toFixed(2) + '%' : '—';
+
+  if (simT >= MAX_T) stopSim();
+}
+
+function startSim() {
+  if (simTimer) return;
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('btnStop').disabled = false;
+  simTimer = setInterval(tick, Math.round(DT * 200));  // 5× ускорение
+}
+
+function stopSim() {
+  clearInterval(simTimer); simTimer = null;
+  document.getElementById('btnRun').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+}
+
+function resetSim() {
+  stopSim();
+  pv = 0; integral = 0; prevErr = 0; x1 = 0; x2 = 0; simT = 0;
+  maxPV = 0; spReached = null; settled = false; settleStart = null; settleT = null;
+  [chartPV, chartCO].forEach(c => {
+    c.data.labels = [];
+    c.data.datasets.forEach(d => d.data = []);
+    c.update('none');
+  });
+  document.getElementById('sim_time').textContent = 't = 0 с';
+  ['overshoot','settle_time','steady_err'].forEach(id => document.getElementById(id).textContent = '—');
+}
+</script>
+{% endblock %}

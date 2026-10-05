@@ -17,6 +17,14 @@ class Subject(models.Model):
     description = models.TextField(blank=True, verbose_name='Описание')
     order       = models.PositiveSmallIntegerField(default=0, verbose_name='Порядок')
     is_active   = models.BooleanField(default=True, verbose_name='Активен')
+    method_guide = models.FileField(
+        upload_to='coursework_guides/', null=True, blank=True,
+        verbose_name='Методичка (PDF)'
+    )
+    example_cw_file = models.FileField(
+        upload_to='coursework_guides/', null=True, blank=True,
+        verbose_name='Пример курсовой работы'
+    )
 
     class Meta:
         ordering = ['order']
@@ -91,6 +99,7 @@ class PracticalWork(models.Model):
     subject       = models.ForeignKey('Subject', null=True, blank=True, on_delete=models.SET_NULL,
                                       related_name='works', verbose_name='Предмет')
     tinkercad_url = models.URLField(blank=True, verbose_name='Ссылка Tinkercad (для МК)')
+    wokwi_url     = models.URLField(blank=True, verbose_name='Ссылка Wokwi проекта (для МК)')
     max_score = models.IntegerField(default=10, verbose_name="Максимальный балл")
     theory_module = models.ForeignKey(
         'TheoryModule', null=True, blank=True, on_delete=models.SET_NULL,
@@ -138,6 +147,13 @@ class Solution(models.Model):
     verdict_text = models.TextField(blank=True, verbose_name="Вердикт")
     attempt_number = models.PositiveIntegerField(default=1, verbose_name="Номер попытки")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано")
+    similarity_score = models.FloatField(null=True, blank=True, verbose_name="Макс. схожесть (%)")
+    similarity_matches = models.JSONField(default=list, blank=True, verbose_name="Совпадения")
+
+    @property
+    def score_points(self):
+        """Convert percentage score (0-100) to actual points based on work max_score."""
+        return round((self.score or 0) * (self.work.max_score or 10) / 100)
 
     def __str__(self):
         return f"Решение {self.student.username} для {self.work.title}"
@@ -410,6 +426,7 @@ class Quiz(models.Model):
     title       = models.CharField(max_length=200, verbose_name='Название теста')
     description = models.TextField(blank=True, verbose_name='Описание')
     pass_score  = models.PositiveIntegerField(default=70, verbose_name='Проходной балл (%)')
+    time_limit  = models.PositiveIntegerField(null=True, blank=True, verbose_name='Лимит времени (мин)')
     is_active   = models.BooleanField(default=True)
     order       = models.PositiveIntegerField(default=0)
 
@@ -485,11 +502,22 @@ class QuizAttempt(models.Model):
     passed     = models.BooleanField(default=False, verbose_name='Пройден')
     created_at = models.DateTimeField(auto_now_add=True)
     answers    = models.JSONField(default=dict, verbose_name='Ответы пользователя')
+    time_spent_seconds = models.PositiveIntegerField(default=0, verbose_name='Время прохождения (сек)')
+    focus_loss_count   = models.PositiveIntegerField(default=0, verbose_name='Уходы со вкладки')
+    suspicious         = models.BooleanField(default=False, verbose_name='Подозрительная попытка')
 
     class Meta:
         verbose_name = 'Попытка теста'
         verbose_name_plural = 'Попытки тестов'
         ordering = ['-created_at']
+
+    @property
+    def time_spent_fmt(self):
+        secs = self.time_spent_seconds
+        if not secs:
+            return None
+        m, s = divmod(secs, 60)
+        return f"{m}м {s:02d}с" if m else f"{s}с"
 
     def __str__(self):
         return f'{self.user.username} → {self.quiz.title} ({self.score}%)'
@@ -692,3 +720,99 @@ class StudentProject(models.Model):
 
     def __str__(self):
         return f'{self.student.last_name} — {self.title}'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# КУРСОВЫЕ РАБОТЫ
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CourseWork(models.Model):
+    STATUS_CHOICES = [
+        ('assigned',    'Назначена'),
+        ('in_progress', 'Выполняется'),
+        ('submitted',   'Сдана на проверку'),
+        ('defended',    'Защищена'),
+        ('rejected',    'На доработку'),
+    ]
+
+    student     = models.ForeignKey(User, on_delete=models.CASCADE,
+                                    related_name='course_works', verbose_name='Студент')
+    subject     = models.ForeignKey('Subject', null=True, blank=True,
+                                    on_delete=models.SET_NULL, verbose_name='Предмет')
+    title       = models.CharField(max_length=300, verbose_name='Тема курсовой работы')
+    description = models.TextField(blank=True, verbose_name='Описание / задание')
+    status      = models.CharField(max_length=20, choices=STATUS_CHOICES,
+                                   default='assigned', verbose_name='Статус')
+    assigned_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='assigned_course_works', verbose_name='Назначил')
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    deadline    = models.DateField(null=True, blank=True, verbose_name='Срок сдачи')
+    teacher_note = models.TextField(blank=True, verbose_name='Комментарий преподавателя')
+    grade       = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='Оценка (1-5)')
+
+    class Meta:
+        ordering = ['-assigned_at']
+        verbose_name = 'Курсовая работа'
+        verbose_name_plural = 'Курсовые работы'
+
+    def __str__(self):
+        return f'{self.student.last_name} — {self.title}'
+
+    @property
+    def status_color(self):
+        return {
+            'assigned':    '#3b82f6',
+            'in_progress': '#f59e0b',
+            'submitted':   '#8b5cf6',
+            'defended':    '#10b981',
+            'rejected':    '#ef4444',
+        }.get(self.status, '#6b7280')
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PYGRID ЛИДЕРБОРД
+# ══════════════════════════════════════════════════════════════════════════════
+
+class PyGridScore(models.Model):
+    user             = models.OneToOneField(User, on_delete=models.CASCADE,
+                                            related_name='pygrid_score', verbose_name='Студент')
+    rounds_completed = models.PositiveIntegerField(default=0, verbose_name='Раундов пройдено')
+    stars_total      = models.PositiveIntegerField(default=0, verbose_name='Всего звёзд')
+    best_steps       = models.PositiveIntegerField(default=0, verbose_name='Лучший суммарный шаг')
+    updated_at       = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-rounds_completed', '-stars_total', 'best_steps']
+        verbose_name = 'Результат PyGrid'
+        verbose_name_plural = 'Результаты PyGrid'
+
+    def __str__(self):
+        return f'{self.user.get_full_name()} — {self.rounds_completed} раундов'
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ЗАПРОС НА ПРОВЕРКУ ВСЕХ РАБОТ
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ReviewRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает проверки'),
+        ('seen',    'Просмотрено'),
+        ('done',    'Проверено'),
+    ]
+    student        = models.ForeignKey(User, on_delete=models.CASCADE,
+                                       related_name='review_requests', verbose_name='Студент')
+    requested_at   = models.DateTimeField(auto_now_add=True, verbose_name='Запрошено')
+    seen_at        = models.DateTimeField(null=True, blank=True, verbose_name='Просмотрено')
+    status         = models.CharField(max_length=20, choices=STATUS_CHOICES,
+                                      default='pending', verbose_name='Статус')
+    solutions_count = models.PositiveIntegerField(default=0, verbose_name='Кол-во решений')
+    comment        = models.TextField(blank=True, verbose_name='Комментарий студента')
+
+    class Meta:
+        ordering = ['-requested_at']
+        verbose_name = 'Запрос на проверку'
+        verbose_name_plural = 'Запросы на проверку'
+
+    def __str__(self):
+        return f'{self.student.last_name} — {self.requested_at:%d.%m.%Y %H:%M}'

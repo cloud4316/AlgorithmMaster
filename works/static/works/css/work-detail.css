@@ -14,7 +14,7 @@
     gap: 0.5rem;
     margin-bottom: 2rem;
     padding: 1rem;
-    background: white;
+    background: var(--bg-card, white);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     border: 1px solid var(--border-light);
@@ -51,7 +51,7 @@
 
 /* Work Header */
 .work-header {
-    background: white;
+    background: var(--bg-card, white);
     padding: 2rem 2.5rem;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
@@ -185,7 +185,7 @@
 }
 
 .content-section {
-    background: white;
+    background: var(--bg-card, white);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
     border: 1px solid var(--border-light);
@@ -301,6 +301,26 @@
     margin-bottom: 2rem;
 }
 
+/* HTML-описания практических работ */
+.task-desc-html { line-height: 1.7; color: var(--text-primary); font-size: .97rem; }
+.task-desc-html p { margin: .55rem 0; }
+.task-desc-html ul, .task-desc-html ol { margin: .4rem 0 .4rem 1.4rem; }
+.task-desc-html li { margin: .25rem 0; }
+.task-desc-html h3 { font-size: 1rem; font-weight: 700; margin: 1.1rem 0 .4rem; color: var(--text-primary); }
+.task-desc-html .how-to-block {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+}
+.task-desc-html .how-to-block h3 { color: #0369a1; margin-top: 0; }
+.task-desc-html table { border-collapse: collapse; width: 100%; margin: .75rem 0; font-size: .9rem; }
+.task-desc-html th { background: #f1f5f9; font-weight: 600; text-align: left; padding: .45rem .65rem; border: 1px solid #cbd5e1; }
+.task-desc-html td { padding: .4rem .65rem; border: 1px solid #cbd5e1; vertical-align: top; }
+.task-desc-html tr:nth-child(even) td { background: #f8fafc; }
+.task-desc-html .formula { font-family: 'Courier New', monospace; background: #f1f5f9; padding: .3rem .6rem; border-radius: 6px; display: inline-block; margin: .3rem 0; }
+
 .task-examples {
     background: var(--background);
     padding: 1.5rem;
@@ -323,7 +343,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
-    background: white;
+    background: var(--bg-card, white);
 }
 
 .example-card:last-child {
@@ -580,7 +600,7 @@
 .solution-comment, .test-results {
     margin-bottom: 1rem;
     padding: 1rem;
-    background: white;
+    background: var(--bg-card, white);
     border-radius: var(--radius);
     border: 1px solid var(--border);
 }
@@ -725,6 +745,65 @@
     }
 }
 
+/* ── Dark mode ──────────────────────────────────────────── */
+body.dark-mode .breadcrumb,
+body.dark-mode .work-header,
+body.dark-mode .content-section { border-color: #334155; }
+
+/* task-desc-html dark mode */
+body.dark-mode .task-desc-html { color: #e2e8f0; }
+body.dark-mode .task-desc-html h3 { color: #e2e8f0; }
+body.dark-mode .task-desc-html .how-to-block { background: #0c1a2e; border-color: #1e4060; }
+body.dark-mode .task-desc-html .how-to-block h3 { color: #38bdf8; }
+body.dark-mode .task-desc-html table { color: #e2e8f0; }
+body.dark-mode .task-desc-html th { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+body.dark-mode .task-desc-html td { border-color: #334155; color: #e2e8f0; }
+body.dark-mode .task-desc-html tr:nth-child(even) td { background: #0f172a; }
+body.dark-mode .task-desc-html .formula { background: #1e293b; color: #a5b4fc; }
+
+/* criteria-block dark mode */
+body.dark-mode .task-desc-html .criteria-block { background: #0a1a0a !important; border-color: #1a4a2a !important; }
+body.dark-mode .task-desc-html .criteria-block .criteria-title { color: #4ade80 !important; }
+body.dark-mode .task-desc-html .criteria-block .criteria-check-title { color: #86efac !important; }
+body.dark-mode .task-desc-html .criteria-block li { color: #d1fae5 !important; }
+body.dark-mode .task-desc-html .criteria-block .grade-5 { color: #4ade80 !important; }
+body.dark-mode .task-desc-html .criteria-block .grade-4 { color: #60a5fa !important; }
+body.dark-mode .task-desc-html .criteria-block .grade-3 { color: #fbbf24 !important; }
+body.dark-mode .task-desc-html .criteria-block .grade-2 { color: #f87171 !important; }
+
+body.dark-mode .section-header {
+    background: #0f172a;
+    border-bottom-color: #334155;
+}
+body.dark-mode .section-header h2 { color: #e2e8f0; }
+
+body.dark-mode .task-examples {
+    background: #0f172a;
+    border-color: #334155;
+}
+body.dark-mode .task-examples h3 { color: #e2e8f0; }
+
+body.dark-mode .example-card { border-color: #334155; }
+body.dark-mode .example-header {
+    background: #1e1b4b;
+    color: #a5b4fc;
+}
+
+body.dark-mode .solution-comment,
+body.dark-mode .test-results { border-color: #334155; }
+
+body.dark-mode .work-main-title { color: #f1f5f9; }
+body.dark-mode .work-order-badge { background: #1e1b4b; border-color: #6366f1; color: #a5b4fc; }
+body.dark-mode .meta-item { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+body.dark-mode .meta-stat { background: #1e1b4b; color: #a5b4fc; border-color: #3730a3; }
+body.dark-mode .meta-best { background: #1c1403; color: #fbbf24; border-color: #78350f; }
+
+body.dark-mode .timeline-item { background: #0f172a; border-color: #334155; }
+body.dark-mode .timeline-item:hover { background: #1e293b; }
+body.dark-mode .solution-details { border-top-color: #334155; }
+body.dark-mode .solution-date { color: #94a3b8; }
+body.dark-mode .solution-file { color: #e2e8f0; }
+
 /* ── Circuit launcher ───────────────────────────────────────────────────── */
 .circuit-launch-block {
     margin-top: 1.5rem;
@@ -775,3 +854,26 @@ body.dark-mode .circuit-launch-inner div { color: #e2e8f0 !important; }
 body.dark-mode .tinkercad-block { border-color: #334155; }
 body.dark-mode .tinkercad-header { background: #022c22; border-color: #064e3b; color: #6ee7b7; }
 body.dark-mode .tinkercad-open-btn { color: #34d399; }
+
+/* ── Wokwi embed ─────────────────────────────────────────────────────── */
+.wokwi-block {
+    margin-top: 1.5rem;
+    border: 1px solid #7c3aed;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.wokwi-header {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .65rem 1rem;
+    background: #f5f3ff;
+    border-bottom: 1px solid #ede9fe;
+    font-size: .9rem;
+    color: #5b21b6;
+    font-weight: 600;
+}
+.wokwi-iframe-wrap { line-height: 0; }
+.wokwi-iframe-wrap iframe { display: block; }
+body.dark-mode .wokwi-block { border-color: #5b21b6; }
+body.dark-mode .wokwi-header { background: #1e1b4b; border-color: #3730a3; color: #a5b4fc; }

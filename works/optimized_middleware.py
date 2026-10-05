@@ -106,8 +106,8 @@ class OptimizedTimeTrackingMiddleware(MiddlewareMixin):
             ).first()
             
             if active_session and session_key in self._session_timers:
-                # Обновляем время сессии
-                time_spent = time.time() - self._session_timers[session_key]
+                # Обновляем время сессии, максимум 10 минут за один переход
+                time_spent = min(time.time() - self._session_timers[session_key], 600)
                 active_session.duration_seconds += int(time_spent)
                 active_session.page_views += 1
                 active_session.save()
@@ -140,14 +140,17 @@ class SessionTimeoutMiddleware(MiddlewareMixin):
             return None
             
         try:
-            # Завершаем сессии, которые неактивны более 2 часов (увеличено с 30 минут)
+            # Завершаем сессии без PageView более 2 часов
             timeout_threshold = timezone.now() - timezone.timedelta(hours=2)
-            
-            # Получаем сессии для завершения
+
+            # Получаем сессии для завершения: нет активности по PageView за 2 часа
             inactive_sessions = UserSession.objects.filter(
                 user=request.user,
                 is_active=True,
-                start_time__lt=timeout_threshold
+            ).exclude(
+                pageview__view_time__gte=timeout_threshold
+            ).exclude(
+                start_time__gte=timeout_threshold  # не закрываем только что созданные
             )
             
             # Завершаем неактивные сессии

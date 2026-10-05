@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Симулятор схем{% if work %} — {{ work.title }}{% endif %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%;overflow:hidden;font-family:Inter,sans-serif;background:#0f172a}
@@ -113,17 +114,29 @@
 
     <div class="sep"></div>
 
-    <button class="tb-btn" onclick="loadBlankArduino()" title="Новая схема Arduino Uno">
-      <i class="fas fa-plus"></i> Arduino Uno
-    </button>
-    <button class="tb-btn" onclick="loadBlankLed()" title="Схема LED + кнопка">
-      <i class="fas fa-lightbulb"></i> LED + кнопка
-    </button>
+    <select id="circuitSelect" class="tb-btn" onchange="loadPreset(this.value)" title="Выбрать схему">
+      <option value="">— Шаблон схемы —</option>
+      <option value="blank">Пустая схема</option>
+      <option value="led_button">LED + кнопка</option>
+      <option value="arduino_led">Arduino + LED + R</option>
+      <option value="rc_filter">RC-фильтр</option>
+      <option value="voltage_divider">Делитель напряжения</option>
+      <option value="transistor_switch">Транзисторный ключ</option>
+    </select>
 
     <div class="sep"></div>
 
-    <a href="https://wokwi.com/playground/arduino-uno" target="_blank" class="tb-btn wokwi" title="Открыть Wokwi — симулятор с Arduino кодом">
-      <i class="fas fa-external-link-alt"></i> Открыть в Wokwi
+    <a href="https://wokwi.com/playground/arduino-uno" target="_blank" class="tb-btn wokwi" title="Wokwi: Arduino Uno + код">
+      <i class="fas fa-microchip"></i> Arduino Uno
+    </a>
+    <a href="https://wokwi.com/projects/new/arduino-nano" target="_blank" class="tb-btn wokwi" title="Wokwi: Arduino Nano">
+      <i class="fas fa-microchip"></i> Nano
+    </a>
+    <a href="https://wokwi.com/projects/new/esp32" target="_blank" class="tb-btn wokwi" title="Wokwi: ESP32">
+      <i class="fas fa-wifi"></i> ESP32
+    </a>
+    <a href="https://wokwi.com/projects/new/pi-pico" target="_blank" class="tb-btn wokwi" title="Wokwi: Raspberry Pi Pico">
+      <i class="fas fa-circle"></i> Pico
     </a>
 
     <div class="sep" style="margin-left:auto"></div>
@@ -151,7 +164,8 @@
       </ul>
       <p style="margin-top:.6rem;font-size:.73rem;color:#64748b">
         Используй меню <b>Draw</b> чтобы добавить компоненты.<br>
-        Для симуляции Arduino кода нажми <b>«Открыть в Wokwi»</b>
+        Для МК-кода (Arduino/ESP32/Pico) — кнопки <b>Wokwi</b> в панели.<br>
+        <b>ПКМ</b> на проводник — свойства элемента.
       </p>
     </div>
   </div>
@@ -161,7 +175,7 @@
     <span id="sim-status">Симулятор загружается...</span>
     <span>
       {% if work %}ПР №{{ work.order }}: {{ work.title }} · {% endif %}
-      CircuitJS (Falstad) · <a href="https://wokwi.com" target="_blank" style="color:#667eea">Wokwi</a> для Arduino-кода
+      CircuitJS (Falstad) — аналоговые схемы · <a href="https://wokwi.com" target="_blank" style="color:#667eea">Wokwi</a> — МК + код (Arduino / ESP32 / Pico)
     </span>
   </div>
 
@@ -192,16 +206,15 @@
 {% endif %}
 
 <script>
-// Стартовые схемы для CircuitJS
+// Стартовые схемы для CircuitJS (Falstad)
 const CIRCUITS = {
-  blank: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
-`,
+  blank: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11\n`,
   arduino_led: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
 v 176 352 176 144 0 0 40 5 0 0 0.5
 r 304 144 432 144 0 330
-l 432 144 432 352 0 0.001 0 0
+162 432 144 432 304 2 default-led 1 0 0 0.01
 w 176 144 304 144 0
-w 432 352 176 352 0
+w 432 304 176 352 0
 `,
   led_button: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
 v 128 400 128 144 0 0 40 5 0 0 0.5
@@ -210,11 +223,37 @@ r 288 144 416 144 0 330
 162 416 144 416 304 2 default-led 1 0 0 0.01
 w 416 304 128 400 0
 `,
+  rc_filter: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
+v 96 336 96 128 0 1 1000 5 0 0 0.5
+r 96 128 256 128 0 1000
+c 256 128 256 336 0 0.000001 0 0.001
+w 96 336 256 336 0
+o 4 16 0 4099 5 0.00009765625 0 2 4 3
+`,
+  voltage_divider: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
+v 112 352 112 128 0 0 40 5 0 0 0.5
+r 112 128 256 128 0 1000
+r 256 128 256 352 0 2200
+w 112 352 256 352 0
+207 256 128 320 128 4 Vout
+`,
+  transistor_switch: `$ 1 0.000005 10.20027730826997 50 5 43 5e-11
+v 96 400 96 128 0 0 40 9 0 0 0.5
+r 96 128 208 128 0 470
+162 208 128 208 288 2 default-led 1 0 0 0.01
+t 256 288 208 288 0 1 -0.6196442409017395 0.6474745 100
+r 320 240 320 288 0 10000
+v 320 400 320 352 0 0 40 3.3 0 0 0.5
+w 320 288 256 288 0
+w 208 400 96 400 0
+w 208 400 320 400 0
+w 320 352 320 400 0
+`,
 };
 
 function buildUrl(circuitDef) {
-  const encoded = btoa(unescape(encodeURIComponent(circuitDef)));
-  return 'https://www.falstad.com/circuit/circuitjs.html?ctz=' + encoded;
+  const compressed = LZString.compressToBase64(circuitDef);
+  return 'https://www.falstad.com/circuit/circuitjs.html?ctz=' + compressed;
 }
 
 function loadCircuit(def) {
@@ -223,15 +262,18 @@ function loadCircuit(def) {
   document.getElementById('sim-status').textContent = 'Симулятор загружен';
 }
 
-function loadBlankArduino() { loadCircuit(CIRCUITS.blank); }
-function loadBlankLed() { loadCircuit(CIRCUITS.led_button); }
+function loadPreset(key) {
+  if (!key) return;
+  if (CIRCUITS[key]) loadCircuit(CIRCUITS[key]);
+  document.getElementById('circuitSelect').value = '';
+}
 
 // Грузим начальную схему
 window.addEventListener('load', function() {
   {% if initial_circuit %}
   loadCircuit({{ initial_circuit|safe }});
   {% else %}
-  loadCircuit(CIRCUITS.led_button);
+  loadCircuit(CIRCUITS.led_button);  // дефолт: LED + кнопка
   {% endif %}
 
   document.getElementById('sim-frame').addEventListener('load', function() {

@@ -22,7 +22,10 @@ else:
     DEBUG = (BASE_DIR / 'DEBUG.lock').exists()
 
 # ─── РАЗРЕШЁННЫЕ ХОСТЫ ─────────────────────────────────────────────────────────
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*'] if DEBUG else (
+    ['localhost', '127.0.0.1', '::1'] +
+    [h.strip() for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',') if h.strip()]
+)
 
 INTERNAL_IPS = ['127.0.0.1', '::1', 'localhost']
 
@@ -30,7 +33,8 @@ INTERNAL_IPS = ['127.0.0.1', '::1', 'localhost']
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'http://192.168.0.0:8000',
+    'http://192.168.200.50:8000',
+    # '192.168.0.0' — сетевой адрес, не хост; добавь конкретные IP при необходимости
     'http://10.0.0.0:8000',
 ]
 
@@ -44,6 +48,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'works',
 ]
+
+# ─── OLLAMA LLM (локальная ИИ-проверка кода) ───────────────────────────────────
+OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'llama3.2:3b')
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -156,9 +164,10 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 604800
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
 
 # ─── АУТЕНТИФИКАЦИЯ ────────────────────────────────────────────────────────────
 LOGIN_REDIRECT_URL  = 'home'
@@ -234,6 +243,11 @@ LOGGING = {
         'django.request': {
             'handlers': ['errors_file', 'file'],
             'level': 'ERROR',
+            'propagate': False,
+        },
+        'backup': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
             'propagate': False,
         },
         'django.security': {

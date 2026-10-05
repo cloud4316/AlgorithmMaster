@@ -203,7 +203,7 @@
 }
 
 .card {
-    background: white;
+    background: var(--bg-card, white);
     padding: 2rem;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
@@ -262,7 +262,7 @@
 }
 
 .panel {
-    background: white;
+    background: var(--bg-card, white);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
     overflow: hidden;
@@ -376,8 +376,8 @@
     top: -45px;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--text-primary);
-    color: white;
+    background: #1c1c1e;
+    color: #f5f5f7;
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 12px;
@@ -397,7 +397,7 @@
     left: 50%;
     transform: translateX(-50%);
     border: 5px solid transparent;
-    border-top-color: var(--text-primary);
+    border-top-color: #1c1c1e;
 }
 
 @keyframes tooltipFadeIn {
@@ -508,23 +508,18 @@
     gap: 0.25rem;
 }
 
-.status-submitted { 
-    background: var(--warning-light); 
-    color: #92400e; 
-    border: 1px solid #fbbf24;
-}
+.status-submitted,
+.status-pending    { background:#e0e7ff; color:#3730a3; border:1px solid #a5b4fc; }
 
-.status-accepted { 
-    background: var(--success-light); 
-    color: #065f46; 
-    border: 1px solid #10b981;
-}
+.status-correct,
+.status-accepted   { background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; }
 
-.status-rejected { 
-    background: var(--error-light); 
-    color: #991b1b; 
-    border: 1px solid #ef4444;
-}
+.status-incorrect,
+.status-rejected   { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; }
+
+.status-partially_correct { background:#fef3c7; color:#92400e; border:1px solid #fcd34d; }
+
+.status-checking   { background:#dbeafe; color:#1e40af; border:1px solid #93c5fd; }
 
 /* Topics Progress */
 .topics {
@@ -602,7 +597,7 @@
 }
 
 .activity-card {
-    background: white;
+    background: var(--bg-card, white);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
     padding: 2rem;
@@ -831,6 +826,44 @@
         width: 20px;
     }
 }
+
+/* ── Dark mode ──────────────────────────────────────────── */
+body.dark-mode .card { background: #1c1c1e !important; }
+body.dark-mode .card,
+body.dark-mode .panel,
+body.dark-mode .activity-card { border-color: rgba(255,255,255,.1); }
+
+body.dark-mode .panel-header {
+    background: #000000;
+    border-bottom-color: rgba(255,255,255,.08);
+}
+body.dark-mode .panel-header h2 { color: #f5f5f7; }
+
+body.dark-mode .activity {
+    background: #000000;
+}
+body.dark-mode .activity::before { opacity: 0.1; }
+
+body.dark-mode .table thead th {
+    background: #000000;
+    border-bottom-color: rgba(255,255,255,.08);
+    color: #f5f5f7;
+}
+body.dark-mode .table tbody td { border-bottom-color: rgba(255,255,255,.06); }
+body.dark-mode .table tbody tr:hover { background: #2c2c2e; }
+
+body.dark-mode .topics li {
+    background: #000000;
+    border-color: rgba(255,255,255,.08);
+}
+body.dark-mode .topics li:hover { background: #2c2c2e; }
+
+body.dark-mode .day { color: #98989d; }
+body.dark-mode .label { color: #98989d; }
+body.dark-mode .value { color: #f5f5f7; }
+body.dark-mode .topic-name { color: #f5f5f7; }
+body.dark-mode .activity-header h3 { color: #f5f5f7; }
+body.dark-mode .time-value { color: #7dd3fc; }
 
 @media (max-width: 480px) {
     .profile {

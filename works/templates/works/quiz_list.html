@@ -52,18 +52,28 @@
     <!-- Карточки тестов -->
     <div class="ql-cards">
       {% for quiz in block.quizzes %}
-      <a href="{% url 'quiz_detail' quiz.id %}" class="ql-card {% if quiz.best_attempt %}{% if quiz.best_attempt.passed %}ql-card--passed{% else %}ql-card--failed{% endif %}{% endif %}">
+      <a href="{% url 'quiz_detail' quiz.id %}"
+         class="ql-card {% if quiz.theory_locked %}ql-card--locked{% elif quiz.best_attempt %}{% if quiz.best_attempt.passed %}ql-card--passed{% else %}ql-card--failed{% endif %}{% endif %}"
+         {% if quiz.theory_locked %}title="Сначала изучи теорию раздела ({{ quiz.theory_done }}/{{ quiz.theory_total }} уроков)"{% endif %}>
 
         <!-- Иконка модуля -->
-        <div class="ql-card-icon">
-          <i class="{{ quiz.module.icon|default:'fas fa-book' }}"></i>
+        <div class="ql-card-icon" {% if quiz.theory_locked %}style="opacity:.45;filter:grayscale(1)"{% endif %}>
+          {% if quiz.theory_locked %}
+            <i class="fas fa-lock"></i>
+          {% else %}
+            <i class="{{ quiz.module.icon|default:'fas fa-book' }}"></i>
+          {% endif %}
         </div>
 
         <!-- Основной контент -->
         <div class="ql-card-body">
           <div class="ql-card-top">
             <span class="ql-card-module">{{ quiz.module.title|truncatechars:30 }}</span>
-            {% if quiz.best_attempt %}
+            {% if quiz.theory_locked %}
+              <span class="ql-badge" style="background:#fef3c7;color:#92400e">
+                <i class="fas fa-book"></i> {{ quiz.theory_done }}/{{ quiz.theory_total }} ур.
+              </span>
+            {% elif quiz.best_attempt %}
               {% if quiz.best_attempt.passed %}
                 <span class="ql-badge ql-badge--pass"><i class="fas fa-check"></i> {{ quiz.best_attempt.score }}%</span>
               {% else %}
@@ -73,16 +83,21 @@
               <span class="ql-badge ql-badge--new">Новый</span>
             {% endif %}
           </div>
-          <h3 class="ql-card-title">{{ quiz.title }}</h3>
+          <h3 class="ql-card-title" {% if quiz.theory_locked %}style="opacity:.55"{% endif %}>{{ quiz.title }}</h3>
           <div class="ql-card-meta">
             <span><i class="fas fa-question-circle"></i> {{ quiz.questions_count }} вопр.</span>
             <span><i class="fas fa-award"></i> порог {{ quiz.pass_score }}%</span>
+            {% if quiz.theory_locked %}
+              <span style="color:#92400e"><i class="fas fa-lock"></i> Изучи теорию</span>
+            {% endif %}
           </div>
         </div>
 
         <!-- Кнопка действия -->
         <div class="ql-card-action">
-          {% if quiz.best_attempt %}
+          {% if quiz.theory_locked %}
+            <span class="ql-btn" style="background:#fef3c7;color:#92400e"><i class="fas fa-lock"></i></span>
+          {% elif quiz.best_attempt %}
             <span class="ql-btn ql-btn--retry"><i class="fas fa-redo"></i></span>
           {% else %}
             <span class="ql-btn ql-btn--start"><i class="fas fa-play"></i></span>
@@ -164,6 +179,8 @@
 .ql-card--passed:hover{background:#dcfce7}
 .ql-card--failed{background:#fff7f7}
 .ql-card--failed:hover{background:#fee2e2}
+.ql-card--locked{background:#fefce8;cursor:not-allowed;pointer-events:auto}
+.ql-card--locked:hover{background:#fef9c3}
 
 /* Иконка */
 .ql-card-icon{width:40px;height:40px;border-radius:10px;
@@ -203,17 +220,27 @@
 .ql-empty code{background:#f3f4f6;padding:.2rem .5rem;border-radius:4px;font-size:.85rem}
 
 /* Тёмная тема */
-[data-theme="dark"] .ql-hero,
-[data-theme="dark"] .ql-card{background:#1f2937;border-color:#374151}
-[data-theme="dark"] .ql-hero-text h1,[data-theme="dark"] .ql-card-title{color:#f9fafb}
-[data-theme="dark"] .ql-stat{background:#111827;border-color:#374151}
-[data-theme="dark"] .ql-stat-num{color:#f9fafb}
-[data-theme="dark"] .ql-cards{background:#374151}
-[data-theme="dark"] .ql-card:hover{background:#374151}
-[data-theme="dark"] .ql-card--passed{background:#052e16}
-[data-theme="dark"] .ql-card--failed{background:#450a0a}
-[data-theme="dark"] .ql-btn--retry{background:#374151;color:#d1d5db}
-[data-theme="dark"] .ql-progress-track{background:#374151}
+body.dark-mode .ql-hero,
+body.dark-mode .ql-card{background:#1c1c1e;border-color:rgba(255,255,255,.1)}
+body.dark-mode .ql-hero-text h1,body.dark-mode .ql-card-title{color:#f5f5f7}
+body.dark-mode .ql-stat{background:#000000;border-color:rgba(255,255,255,.1)}
+body.dark-mode .ql-stat-num{color:#f5f5f7}
+body.dark-mode .ql-cards{background:rgba(255,255,255,.06)}
+body.dark-mode .ql-card:hover{background:#2c2c2e}
+body.dark-mode .ql-card--passed{background:#022c22}
+body.dark-mode .ql-card--failed{background:#1c0707}
+body.dark-mode .ql-btn--retry{background:#2c2c2e;color:#f5f5f7}
+body.dark-mode .ql-progress-track{background:rgba(255,255,255,.1)}
+body.dark-mode .ql-empty{background:#1c1c1e;border-color:rgba(255,255,255,.1);color:#98989d}
+body.dark-mode .ql-empty h3{color:#f5f5f7}
+body.dark-mode .ql-block-header{background:color-mix(in srgb,var(--bcolor,#667eea) 15%,#1c1c1e);border-color:rgba(255,255,255,.08)}
+body.dark-mode .ql-block-title h2{color:#f5f5f7}
+body.dark-mode .ql-block-sub{color:#98989d}
+body.dark-mode .ql-card-icon{background:color-mix(in srgb,var(--bcolor,#667eea) 18%,#000000);border-color:transparent}
+body.dark-mode .ql-card-module{color:#98989d}
+body.dark-mode .ql-badge--pass{background:rgba(5,150,105,.2);color:#6ee7b7}
+body.dark-mode .ql-badge--fail{background:rgba(220,38,38,.2);color:#fca5a5}
+body.dark-mode .ql-badge--new{background:rgba(59,130,246,.2);color:#93c5fd}
 
 /* Мобильная адаптация */
 @media(max-width:640px){
